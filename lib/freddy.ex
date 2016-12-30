@@ -1,0 +1,2 @@
+defmodule Freddy do
+end
