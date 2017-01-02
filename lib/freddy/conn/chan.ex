@@ -1,14 +1,12 @@
 defmodule Freddy.Conn.Chan do
-  defstruct [:given]
+  defstruct [:adapter, :given]
 
-  alias AMQP.Basic
-  alias AMQP.Channel
-  alias AMQP.Queue
+  alias __MODULE__
 
   alias Freddy.Conn.Exchange
 
-  def new(given),
-    do: %__MODULE__{given: given}
+  def new(adapter, given),
+    do: %Chan{adapter: adapter, given: given}
 
   def open(conn),
     do: Freddy.Conn.open_channel(conn)
@@ -19,45 +17,45 @@ defmodule Freddy.Conn.Chan do
   def alive?(%{given: given}),
     do: given && given.pid && Process.alive?(given.pid)
 
-  def close(chan = %{given: given}) do
-    if alive?(chan), do: Channel.close(given)
+  def close(chan = %{adapter: adapter, given: given}) do
+    if alive?(chan), do: adapter.close_channel(given)
   end
 
-  def monitor(%{given: given}),
-    do: Process.monitor(given.pid)
+  def monitor(%{adapter: adapter, given: given}),
+    do: adapter.monitor_channel(given)
 
-  def link(%{given: given}),
-    do: Process.link(given.pid)
+  def link(%{adapter: adapter, given: given}),
+    do: adapter.link_channel(given)
 
-  def unlink(%{given: given}),
-    do: Process.unlink(given.pid)
+  def unlink(%{adapter: adapter, given: given}),
+    do: adapter.unlink_channel(given)
 
-  def declare_queue(%{given: given}, name, opts \\ []),
-    do: Queue.declare(given, name, opts)
+  def declare_queue(%{adapter: adapter, given: given}, name, opts \\ []),
+    do: adapter.declare_queue(given, name, opts)
 
-  def consume(%{given: given}, queue, consumer_pid \\ nil, opts \\ []),
-    do: Basic.consume(given, queue, consumer_pid, opts)
+  def consume(%{adapter: adapter, given: given}, queue, consumer_pid \\ nil, opts \\ []),
+    do: adapter.consume(given, queue, consumer_pid, opts)
 
-  def publish(%{given: given}, %Exchange{name: exchange}, routing_key, payload, opts \\ []),
-    do: Basic.publish(given, exchange, routing_key, payload, opts)
+  def publish(%{adapter: adapter, given: given}, %Exchange{name: exchange}, routing_key, payload, opts \\ []),
+    do: adapter.publish(given, exchange, routing_key, payload, opts)
 
-  def register_return_handler(%{given: %{pid: pid}}, handler_pid),
-    do: :amqp_channel.register_return_handler(pid, handler_pid)
+  def register_return_handler(%{adapter: adapter, given: given}, handler_pid),
+    do: adapter.register_return_handler(given, handler_pid)
 
-  def unregister_return_handler(chan = %{given: given}) do
+  def unregister_return_handler(chan = %{adapter: adapter, given: given}) do
     if alive?(chan),
-      do: :amqp_channel.unregister_return_handler(given.pid)
+      do: adapter.unregister_return_handler(given)
   end
 
-  def ack(%{given: given}, tag),
-    do: Basic.ack(given, tag)
+  def ack(%{adapter: adapter, given: given}, tag, opts \\ []),
+    do: adapter.ack(given, tag, opts)
 
-  def nack(%{given: given}, tag),
-    do: Basic.nack(given, tag)
+  def nack(%{adapter: adapter, given: given}, tag, opts \\ []),
+    do: adapter.nack(given, tag, opts)
 
-  def reject(%{given: given}, tag),
-    do: Basic.reject(given, tag)
+  def reject(%{adapter: adapter, given: given}, tag, opts \\ []),
+    do: adapter.reject(given, tag, opts)
 
-  def cancel(%{given: given}, tag),
-    do: Basic.cancel(given, tag)
+  def cancel(%{adapter: adapter, given: given}, tag, opts \\ []),
+    do: adapter.cancel(given, tag, opts)
 end

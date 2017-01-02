@@ -3,11 +3,10 @@ defmodule Freddy.Conn.State do
   alias __MODULE__.Waiting
 
   alias Freddy.Conn.Chan
-
-  alias AMQP.Connection
-  alias AMQP.Channel
+  alias Freddy.Conn.Adapter
 
   defstruct config: nil,
+            adapter: nil,
             waiting: nil,
             given_conn: nil,
             monitor: nil,
@@ -17,13 +16,14 @@ defmodule Freddy.Conn.State do
   @default_backoff [1, 2, 3, 4, 5, 7, 10, 12, 15, 18]
 
   def new(config) do
+    adapter = Adapter.new(Keyword.get(config, :adapter))
     waiting = Waiting.new()
 
-    %State{ config: config, waiting: waiting, status: :not_connected }
+    %State{ config: config, adapter: adapter, waiting: waiting, status: :not_connected }
   end
 
-  def connect(state) do
-    case Connection.open(state.config) do
+  def connect(state = %{adapter: adapter, config: config}) do
+    case adapter.open_connection(config) do
       {:ok, conn}      -> connected(state, conn)
       {:error, reason} -> retry(state, reason)
     end
@@ -72,9 +72,9 @@ defmodule Freddy.Conn.State do
   defp retry(state = %{backoff: []}, reason),
     do: {:exhausted, reason, %{state | status: :not_connected}}
 
-  defp do_open_channel(%{given_conn: conn, status: :connected}) do
-    with {:ok, chan} <- Channel.open(conn),
-     do: {:ok, Chan.new(chan)}
+  defp do_open_channel(%{adapter: adapter, given_conn: conn, status: :connected}) do
+    with {:ok, chan} <- adapter.open_channel(conn),
+     do: {:ok, Chan.new(adapter, chan)}
   end
 
   defp do_open_channel(_),
@@ -97,8 +97,8 @@ defmodule Freddy.Conn.State do
     state
   end
 
-  defp connected(state, conn) do
-    monitor = Process.monitor(conn.pid)
+  defp connected(state = %{adapter: adapter}, conn) do
+    monitor = adapter.monitor_connection(conn)
     {clients, waiting} = Waiting.pop_all(state.waiting)
 
     new_state = %{
@@ -115,13 +115,13 @@ defmodule Freddy.Conn.State do
     {:ok, new_state}
   end
 
-  defp close_connection(state = %{given_conn: conn, monitor: ref}) do
+  defp close_connection(state = %{adapter: adapter, given_conn: conn, monitor: ref}) do
     if is_reference(ref) do
       Process.demonitor(ref)
     end
 
     if conn && conn.pid && Process.alive?(conn.pid) do
-      Connection.close(conn)
+      adapter.close_connection(conn)
     end
 
     %{state | given_conn: nil, monitor: nil, status: :not_connected}
@@ -144,7 +144,7 @@ defmodule Freddy.Conn.State do
   end
 
   defp reply({:sync, client}, response) do
-    Elixir.Connection.reply(client, response)
+    Connection.reply(client, response)
   end
 
   def backoff_intervals(config) do

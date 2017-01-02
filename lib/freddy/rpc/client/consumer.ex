@@ -15,8 +15,8 @@ defmodule Freddy.RPC.Client.Consumer do
   def queue_spec(_opts),
     do: {"", [exclusive: true]}
 
-  def handle_ready(state, _meta) do
-    Logger.info "Consuming messages from #{state.queue}"
+  def handle_ready(_meta, state = %{queue: queue}) do
+    Logger.info "Consuming messages from #{queue}"
     {:noreply, state}
   end
 
@@ -26,7 +26,7 @@ defmodule Freddy.RPC.Client.Consumer do
 
     Client.reply(client, correlation_id, {:ok, decoded})
 
-    {:ack, state}
+    {:noreply, state}
   end
 
   def handle_exception(error, state) do
