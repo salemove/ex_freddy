@@ -96,6 +96,7 @@ defmodule Freddy.Conn do
                 | :not_connected
                 | :reconnecting
 
+  @doc false
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts], location: :keep do
       @moduledoc """
