@@ -21,6 +21,12 @@ defmodule Freddy.GenConsumer do
 
     * `handle_exception(exception, state)`
 
+    * `handle_cancel(meta, state)`
+
+    * `handle_cancel_ok(meta, state)`
+
+  `Freddy.GenConsumer` provides default implementation for all of callbacks above.
+
   Other callbacks from `Freddy.GenQueue` and `Connection` are also available.
 
   # Example
@@ -68,6 +74,10 @@ defmodule Freddy.GenConsumer do
   @callback handle_message(payload :: any, meta, state) :: on_message
 
   @callback handle_exception(Exception.t, state) :: on_message
+
+  @callback handle_cancel(meta, state) :: on_callback
+
+  @callback handle_cancel_ok(meta, state) :: on_callback
 
   @type state :: GenQueue.state
 
@@ -139,6 +149,18 @@ defmodule Freddy.GenConsumer do
       defoverridable [handle_message: 3]
 
       @doc false
+      def handle_cancel(_meta, state),
+        do: {:stop, :shutdown, state}
+
+      defoverridable [handle_cancel: 2]
+
+      @doc false
+      def handle_cancel_ok(_meta, state),
+        do: {:stop, :normal, state}
+
+      defoverridable [handle_cancel_ok: 2]
+
+      @doc false
       def handle_exception(error, state),
         do: {:stop, {:error, error.message}, state}
 
@@ -158,14 +180,14 @@ defmodule Freddy.GenConsumer do
 
       # Sent by the broker when the consumer is unexpectedly cancelled (such as after a queue deletion)
       @doc false
-      def handle_info({:basic_cancel, %{consumer_tag: _consumer_tag}}, state) do
-        {:stop, :shutdown, state}
+      def handle_info({:basic_cancel, meta = %{consumer_tag: _consumer_tag}}, state) do
+        handle_cancel(meta, state)
       end
 
       # Confirmation sent by the broker to the consumer process after a Basic.cancel
       @doc false
-      def handle_info({:basic_cancel_ok, %{consumer_tag: _consumer_tag}}, state) do
-        {:stop, :normal, state}
+      def handle_info({:basic_cancel_ok, meta = %{consumer_tag: _consumer_tag}}, state) do
+        handle_cancel_ok(meta, state)
       end
 
       # Handle new message delivery

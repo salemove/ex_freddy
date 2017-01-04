@@ -10,7 +10,7 @@ defmodule Freddy.RPC.Client do
   {:ok, conn} = Freddy.Conn.start_link()
   {:ok, client} = Freddy.RPC.Client.start_link(conn, "QueueName")
 
-  response = Freddy.RPC.Client.call(client, %{json: :payload})
+  response = Freddy.RPC.Client.call(client, "payload")
   {:ok, data} = response
   ```
 
@@ -25,6 +25,9 @@ defmodule Freddy.RPC.Client do
     use Freddy.RPC.Client,
         connection: MyApp.Connection,
         queue: "QueueName"
+
+    # Include middleware to encode message to JSON and parse JSON response
+    plug Middleware.JSON, engine: Poison
 
     def tweet(message) do
       call(%{action: "tweet", message: message})
@@ -54,16 +57,21 @@ defmodule Freddy.RPC.Client do
       @connection Keyword.fetch!(opts, :connection)
       @queue Keyword.fetch!(opts, :queue)
 
-      use Supervisor
       alias Freddy.RPC.Client
+      alias Client.Middleware
+
+      use Supervisor
+      use Client.Builder
 
       def start_link do
         {:ok, _} = ensure_connected()
         Supervisor.start_link(__MODULE__, [], name: @supervisor)
       end
 
-      def call(payload, opts \\ []),
-        do: Client.call(__MODULE__, payload, opts)
+      def call(payload, opts \\ []) do
+        opts = Keyword.put(opts, :__middleware__, __middleware__())
+        Client.call(__MODULE__, payload, opts)
+      end
 
       def stop,
         do: Supervisor.stop(@supervisor)
@@ -90,9 +98,12 @@ defmodule Freddy.RPC.Client do
 
   require Logger
 
-  alias __MODULE__.State
+  alias Freddy.RPC.Client.{Builder, State, Request, Middleware}
+  use Builder
 
-  @default_timeout 3000
+  # Default Middleware stack
+  plug Middleware.Timeout, default: 3000
+  plug Middleware.RPCRequest
 
   def start_link(conn, queue, opts \\ []),
     do: Connection.start_link(__MODULE__, [conn, queue], opts)
@@ -101,18 +112,39 @@ defmodule Freddy.RPC.Client do
     do: Connection.start(__MODULE__, [conn, queue], opts)
 
   def call(client, payload, opts \\ []) do
-    timeout = Keyword.get(opts, :timeout, @default_timeout)
-    opts = Keyword.merge(opts, timeout: timeout)
-
-    try do
-      Connection.call(client, {:call, payload, opts}, timeout)
-    catch
-      :exit, {reason, _} -> {:error, reason}
-    end
+    client
+    |> Request.new(payload, opts)
+    |> Middleware.run(build_middleware_stack(opts))
   end
+
+  def reply_queue(client),
+    do: Connection.call(client, :reply_queue)
+
+  def destination_queue(client),
+    do: Connection.call(client, :destination_queue)
 
   def stop(client),
     do: Connection.call(client, {:close, :normal})
+
+  # Private API
+
+  @doc false
+  def perform_request(request = %Request{client: client, payload: payload, opts: opts, env: env}) do
+    result =
+      if Map.has_key?(env, :client_timeout) do
+        Connection.call(client, {:call, payload, opts}, env[:client_timeout])
+      else
+        Connection.call(client, {:call, payload, opts})
+      end
+
+    case result do
+      {:ok, payload, opts} ->
+        %{request | payload: payload, opts: opts, status: :ok}
+
+      {:error, reason} ->
+        %{request | status: :error, error: reason}
+    end
+  end
 
   @doc false
   def reply(client, correlation_id, response),
@@ -139,6 +171,14 @@ defmodule Freddy.RPC.Client do
 
   def handle_call({:call, payload, opts}, from, state),
     do: State.request(state, from, payload, opts)
+
+  def handle_call(:reply_queue, _from, state) do
+    {:reply, state.reply_queue, state}
+  end
+
+  def handle_call(:destination_queue, _from, state) do
+    {:reply, state.queue, state}
+  end
 
   def handle_call({:close, reason}, _from, state),
     do: {:disconnect, reason, :ok, state}
@@ -190,4 +230,17 @@ defmodule Freddy.RPC.Client do
   # Ignore other EXIT messages, because they may come when Client is already restarted and recovered
   def handle_info({:EXIT, _from, _reason}, state),
     do: {:noreply, state}
+
+  # Private functions
+
+  @core_middleware [
+    {Middleware.ErrorHandler, :call, []},
+    {__MODULE__, :perform_request}
+  ]
+
+  defp build_middleware_stack(opts) do
+    __middleware__() ++
+    Keyword.get(opts, :__middleware__, []) ++
+    @core_middleware
+  end
 end

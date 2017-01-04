@@ -20,12 +20,8 @@ defmodule Freddy.RPC.Client.Consumer do
     {:noreply, state}
   end
 
-  def handle_message(payload, _meta = %{correlation_id: correlation_id}, state = %{client: client}) do
-    Logger.debug("Received message #{payload} with correlation_id #{correlation_id}")
-    decoded = Poison.decode!(payload)
-
-    Client.reply(client, correlation_id, {:ok, decoded})
-
+  def handle_message(payload, meta = %{correlation_id: correlation_id}, state = %{client: client}) do
+    Client.reply(client, correlation_id, {:ok, payload, meta})
     {:noreply, state}
   end
 

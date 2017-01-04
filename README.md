@@ -38,6 +38,8 @@ The package can be installed as:
       use Freddy.RPC.Client, 
           connection: Freddy.Conn, 
           queue: "QueueName"
+
+      plug Middleware.JSON
           
       def post_message(message),
         do: call(%{action: "post_message", message: message})

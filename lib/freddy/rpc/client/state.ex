@@ -99,13 +99,8 @@ defmodule Freddy.RPC.Client.State do
     %{state | consumer: nil, reply_queue: nil}
   end
 
-  defp start_producer(state = %{conn: conn, queue: queue, reply_queue: reply_queue}) do
-    {:ok, producer} = Producer.start_link(
-      conn,
-      client: self(),
-      queue: queue,
-      reply_queue: reply_queue
-    )
+  defp start_producer(state = %{conn: conn}) do
+    {:ok, producer} = Producer.start_link(conn, client: self())
     Producer.notify_on_connect(producer)
 
     %{state | producer: producer}
@@ -118,8 +113,10 @@ defmodule Freddy.RPC.Client.State do
     %{state | producer: nil}
   end
 
-  defp publish(state = %{producer: producer, waiting: waiting}, client, payload, opts) do
-    {:ok, correlation_id} = Producer.publish(producer, payload, opts)
+  defp publish(state = %{producer: producer, queue: queue, waiting: waiting}, client, payload, opts) do
+    correlation_id = Keyword.fetch!(opts, :correlation_id)
+    Producer.produce(producer, queue, payload, opts)
+
     new_waiting = Map.put(waiting, correlation_id, client)
 
     %{state | waiting: new_waiting}
