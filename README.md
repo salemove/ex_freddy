@@ -2,6 +2,8 @@
 
 RPC protocol over RabbitMQ. **In development stage**.
 
+[![Build Status](https://travis-ci.org/salemove/ex_freddy.svg?branch=master)](https://travis-ci.org/salemove/ex_freddy)
+
 ## Installation
 
 The package can be installed as:
