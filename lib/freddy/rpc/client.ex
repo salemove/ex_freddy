@@ -264,9 +264,12 @@ defmodule Freddy.RPC.Client do
   @doc """
   Performs a RPC request and blocks until the response arrives.
   """
-  @spec request(GenServer.server, payload, GenServer.options) :: response
+  @spec request(GenServer.server, payload, GenServer.options) ::
+          {:ok, response} |
+          {:error, reason :: term} |
+          {:error, reason :: term, hint :: term}
   def request(client, payload, opts \\ []) do
-    Hare.RPC.Client.request(client, payload, "", opts, @gen_server_timeout)
+    Hare.Actor.call(client, {:"$hare_request", payload, "", opts}, @gen_server_timeout)
   end
 
   # Hare.RPC.Client callbacks
