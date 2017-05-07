@@ -1,87 +1,74 @@
 defmodule Freddy.RPC.ClientTest do
   use Freddy.ConnCase
 
-  defmodule TestServer do
-    @moduledoc """
-    Simple echoing RPC Server.
-    """
-
-    use Freddy.GenConsumer, producer: nil, paused?: false
-
-    def init_worker(state, opts) do
-      state = super(state, opts)
-      paused? = Keyword.get(opts, :paused, false)
-      %{state | paused?: paused?}
-    end
-
-    def handle_ready(_meta, state) do
-      {:noreply, start_producer(state)}
-    end
-
-    def handle_message(payload, %{reply_to: reply_to, correlation_id: correlation_id}, state = %{producer: producer}) do
-      unless state.paused?,
-        do: Freddy.Producer.produce(producer, reply_to, payload, correlation_id: correlation_id)
-
-      {:ack, state}
-    end
-
-    defp start_producer(state = %{conn: conn}) do
-      {:ok, producer} = Freddy.Producer.start_link(conn)
-      Freddy.Producer.await_connection(producer)
-
-      %{state | producer: producer}
-    end
-  end
-
   alias Freddy.RPC.Client
 
-  @queue "rpc-server"
-  @sample_payload %{"key" => "value"}
+  defmodule TestClient do
+    use Client
 
-  test "returns response from RPC server" do
-    {:ok, client_conn} = open_connection()
-    {:ok, server_conn} = open_connection()
-
-    {:ok, server} = TestServer.start_link(server_conn, queue: @queue)
-    {:ok, client} = Client.start_link(client_conn, @queue)
-
-    :timer.sleep(100)
-
-    response = Client.call(client, @sample_payload)
-
-    assert response == {:ok, @sample_payload}
-
-    TestServer.stop(server)
-    Client.stop(client)
+    def start_link(conn, config, initial, opts \\ []) do
+      Client.start_link(__MODULE__, conn, config, initial, opts)
+    end
   end
 
-  test "returns {:error, :no_route} if there is no consumer subscribed to a given queue" do
-    {:ok, client_conn} = open_connection()
-    {:ok, client} = Client.start_link(client_conn, @queue)
+  test "sends request to specified queue", %{conn: conn, history: history} do
+    queue_name = "TestQueue"
+    rpc_client = start_client(conn, [routing_key: queue_name])
 
-    :timer.sleep(100)
+    request = Task.async fn ->
+      Freddy.RPC.Client.request(rpc_client, %{type: "action", key: "value"})
+    end
 
-    response = Client.call(client, @sample_payload)
+    assert nil == Task.yield(request, 100)
 
-    assert response == {:error, :no_route}
+    expected_payload = ~s[{"type":"action","key":"value"}]
 
-    Client.stop(client)
+    assert [{:open_channel,
+              [_conn],
+              {:ok, channel}},
+            {:monitor_channel,
+              [channel],
+              _ref},
+            {:declare_server_named_queue,
+              [channel, [auto_delete: true, exclusive: true]],
+              {:ok, resp_queue_name, _queue_info}},
+            {:consume,
+              [channel, resp_queue_name, ^rpc_client, [no_ack: true]],
+              {:ok, _consumer_tag}},
+            {:publish,
+              [channel, "" = _exchange, ^expected_payload, "TestQueue", [
+                mandatory: true,
+                content_type: "application/json",
+                expiration: "3000",
+                type: "request",
+                reply_to: resp_queue_name,
+                correlation_id: correlation_id
+              ]],
+              :ok}] = Adapter.Backdoor.last_events(history, 5)
+
+    response_payload = ~s[{"success":true,"output":42}]
+
+    send(rpc_client, {:deliver, response_payload, %{correlation_id: correlation_id}})
+
+    assert {:ok, 42} = Task.await(request)
   end
 
-  test "returns {:error, :timeout} if RPC Server is unresponsive" do
-    {:ok, client_conn} = open_connection()
-    {:ok, server_conn} = open_connection()
+  test "returns `{:error, :timeout}` on timeouts", %{conn: conn} do
+    rpc_client = start_client(conn, [routing_key: "TestQueue", timeout: 1])
+    request = Task.async fn ->
+      Freddy.RPC.Client.request(rpc_client, %{})
+    end
 
-    {:ok, server} = TestServer.start_link(server_conn, queue: @queue, paused: true)
-    {:ok, client} = Client.start_link(client_conn, @queue)
+    assert {:ok, result} = Task.yield(request, 100)
+    assert {:error, :timeout} == result
+  end
 
-    :timer.sleep(100)
+  defp start_client(conn, config) do
+    {:ok, rpc_client} = TestClient.start_link(conn, config, nil)
 
-    response = Client.call(client, @sample_payload, timeout: 50)
+    # Emulate RabbitMQ confirmation
+    send(rpc_client, {:consume_ok, %{}})
 
-    assert response == {:error, :timeout}
-
-    TestServer.stop(server)
-    Client.stop(client)
+    rpc_client
   end
 end

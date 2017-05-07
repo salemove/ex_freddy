@@ -3,19 +3,22 @@ defmodule Freddy.Mixfile do
 
   def project do
     [app: :freddy,
-     version: "0.1.0",
-     elixir: "~> 1.3",
+     version: "1.0.0",
+     elixir: "~> 1.4",
      elixirc_paths: elixirc_paths(Mix.env),
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
-     deps: deps()]
+     deps: deps(),
+     dialyzer: [
+       flags: [:error_handling, :race_conditions, :underspecs]]
+    ]
   end
 
   # Configuration for the OTP application
   #
   # Type "mix help compile.app" for more information
   def application do
-    [applications: [:logger, :amqp_client, :amqp, :confex, :connection, :poison]]
+    [applications: [:logger, :hare, :amqp, :poison]]
   end
 
   # Specifies which paths to compile per environment.
@@ -33,12 +36,12 @@ defmodule Freddy.Mixfile do
   # Type "mix help deps" for more examples and options
   defp deps do
     [
-      {:amqp, "0.1.5"},
-      {:amqp_client, git: "https://github.com/jbrisbin/amqp_client.git", branch: "master", override: true},
-      {:confex, "~> 1.4.1"},
-      {:connection, "~> 1.0"},
-      {:poison, "~> 2.0"},
-      {:rabbit_common, git: "https://github.com/jbrisbin/rabbit_common.git", override: true}
+      {:hare, git: "https://github.com/take-five/hare"},
+      {:amqp, "~> 0.2.0"},
+      {:poison, ">= 2.0.0"},
+
+      {:mock, "~> 0.2.0", only: :test},
+      {:dialyxir, "~> 0.5", only: :dev, runtime: false}
     ]
   end
 end
