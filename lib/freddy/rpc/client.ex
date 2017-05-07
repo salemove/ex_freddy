@@ -1,380 +1,419 @@
 defmodule Freddy.RPC.Client do
-  @moduledoc """
-  This module implements RPC pattern as described [here](https://www.rabbitmq.com/tutorials/tutorial-six-elixir.html).
+  @moduledoc ~S"""
+  This module allows to build RPC client for any Freddy-compliant microservice.
 
-  # Examples
+  Example:
 
-  Client can be used as a standalone, non-supervised process:
+    defmodule Tracktor do
+      use Freddy.RPC.Client
 
-  ```elixir
-  {:ok, conn} = Freddy.Conn.start_link()
-  {:ok, client} = Freddy.RPC.Client.start_link(conn, "QueueName")
+      @config [routing_key: "Tracktor", timeout: 3500]
 
-  response = Freddy.RPC.Client.call(client, "payload")
-  {:ok, data} = response
-  ```
-
-  Or it can be put under supervision tree:
-
-  ```elixir
-  defmodule MyApp.Connection do
-    use Freddy.Conn, otp_app: :my_app
-  end
-
-  defmodule MyApp.RemoteServiceClient do
-    use Freddy.RPC.Client,
-        connection: MyApp.Connection,
-        queue: "QueueName"
-
-    # Include middleware to encode message to JSON and parse JSON response
-    plug Middleware.JSON, engine: Poison
-
-    def tweet(message) do
-      call(%{action: "tweet", message: message})
+      def start_link(conn, initial, opts \\ []) do
+        Freddy.RPC.Client.start_link(__MODULE__, conn, @config, initial, opts)
+      end
     end
-  end
 
-  defmodule MyApp.Freddy do
-    use Supervisor
-
-    def start_link,
-      do: Supervisor.start_link(__MODULE__, :ok)
-
-    def init(_) do
-      children = [
-        suprevisor(MyApp.RemoteServiceClient, [])
-      ]
-
-      supervise(children, strategy: :rest_for_one)
-    end
-  end
-  ```
+    {:ok, client} = Tracktor.start_link()
+    Tracktor.request(client, %{type: "get_operators", site_id: "xxx"})
   """
 
-  @typedoc "Freddy connection or RPC client reference."
-  @type server :: GenServer.server
+  @type payload     :: term
+  @type response    :: term
+  @type routing_key :: Hare.Adapter.routing_key
+  @type opts        :: Hare.Adapter.opts
+  @type meta        :: map
+  @type state       :: term
 
-  @typedoc "Return values of `start*` functions."
-  @type on_start :: GenServer.on_start
+  @doc """
+  Called when the RPC client process is first started. `start_link/5` will block
+  until it returns.
 
-  @typedoc "Allowed values for 3rd argument of `start*` functions."
-  @type start_options :: GenServer.options
+  It receives as argument the fourth argument given to `start_link/5`.
 
-  @typedoc "Allowed values for 3rd argument of `call` function."
-  @type req_options :: [req_option]
-  @type req_option :: {:immediate, boolean}
-                    | {:content_encoding, String.t}
-                    | {:headers, Keyword.t}
-                    | {:persistent, boolean}
-                    | {:priority, 0..9}
-                    | {:timeout, timeout}
-                    | {:message_id, String.t}
-                    | {:timestamp, any}
-                    | {:user_id, integer}
-                    | {:app_id, String.t}
+  Returning `{:ok, state}` will cause `start_link/5` to return `{:ok, pid}`
+  and attempt to open a channel on the given connection, declare the exchange,
+  declare a server-named queue, and consume it.
+  After that it will enter the main loop with `state` as its internal state.
+
+  Returning `:ignore` will cause `start_link/5` to return `:ignore` and the
+  process will exit normally without entering the loop, opening a channel or calling
+  `terminate/2`.
+
+  Returning `{:stop, reason}` will cause `start_link/5` to return `{:error, reason}` and
+  the process will exit with reason `reason` without entering the loop, opening a channel,
+  or calling `terminate/2`.
+  """
+  @callback init(initial :: term) ::
+              {:ok, state} |
+              :ignore |
+              {:stop, reason :: term}
 
 
   @doc """
-  When used, defines the current module as AMQP RPC Client.
+  Called when the AMQP server has registered the process as a consumer of the
+  server-named queue and it will start to receive messages.
 
-  There are 2 ways to create client - by using existing Freddy connection supervisor
-  and by creating (and supervising) separate connection.
+  Returning `{:noreply, state}` will causes the process to enter the main loop
+  with the given state.
 
-  # Example 1. Using existing connection.
-
-  This scenario is useful when you want to create few RPC Clients which will use
-  same AMQP connection.
-
-    defmodule MyConnection do
-      use Freddy.Conn, otp_app: :my_app
-    end
-
-    defmodule PushNotificationsClient do
-      use Freddy.RPC.Client,
-          connection: MyConnection,
-          queue: "push_notifications"
-    end
-
-    defmodule MailNotificationsClient do
-      use Freddy.RPC.Client,
-          connection: MyConnection
-          queue: "smtp_queue"
-    end
-
-    # Now to be safe you should put them altogether under the same supervision tree
-    # and start this supverision tree on your application starts.
-
-    defmodule AMQPServicesSupervisor do
-      use Supervisor
-
-      def init(_) do
-        children = [
-          supervisor(MyConnection, []),
-          supervisor(PushNotificationsClient, []),
-          supervisor(MailNotificationsClient, [])
-        ]
-
-        supervise(children, strategy: :rest_for_one)
-      end
-    end
-
-  # Example 2. Creating new connection.
-
-    defmodule MyClient do
-      use Freddy.RPC.Client,
-          otp_app: :my_app,
-          queue: "my_client_queue"
-    end
-
-    MyClient.start_link()
-    MyClient.call(some_payload)
-
-    # Put client under application supervision tree.
-
-  # Options
-
-    * `:connection` - Freddy.Connection supervisor process name. In the given example you should use `MyConnection` atom:
-
-        defmodule MyConnection do
-          use Freddy.Conn, otp_app: :my_app
-        end
-
-        defmodule MyClient do
-          use Freddy.RPC.Client, connection: MyConnection
-        end
-
-    * `:otp_app` - This option should point to an OTP application that has connection configuration.
-
-    * `:queue` - Name of the queue where AMQP messages will be delivered. There shoould be a process,
-      which will consume messages from this queue and respond back, otherwise RPC requests will end
-      with either `{:error, :no_route}` or `{:error, :timeout}`
-
+  Returning `{:stop, reason, state}` will not send the message, terminate the
+  main loop and call `terminate(reason, state)` before the process exists with
+  reason `reason`.
   """
-  defmacro __using__(opts) do
-    quote bind_quoted: [opts: opts] do
-      alias Freddy.RPC.Client
-      alias Client.Middleware
+  @callback handle_ready(meta, state) ::
+              {:noreply, state} |
+              {:stop, reason :: term, state}
 
-      use Supervisor
-      use Client.Builder
+  @doc """
+  Called before a request will be performed to the exchange.
 
-      # Process names
-      @supervisor String.to_atom("#{__MODULE__}.Supervisor")
-      @client __MODULE__
-      @connection Keyword.get(opts, :connection, String.to_atom("#{__MODULE__}.Connection"))
-      @spawn_connection? Keyword.has_key?(opts, :otp_app)
+  It receives as argument the message payload, the routing key, the options
+  for that publication and the internal state.
 
-      @queue Keyword.fetch!(opts, :queue)
+  Returning `{:ok, state}` will cause the request to be performed with no
+  modification, block the client until the response is received, and enter
+  the main loop with the given state.
 
-      def start_link do
-        Supervisor.start_link(__MODULE__, [], name: @supervisor)
-      end
+  Returnung `{:ok, meta, state}` will do the same as `{:ok, state}`, but
+  returned `meta` will be given as a 2nd argument in `on_response/3` and
+  as a 1st argument in `on_timeout/3` callback.
 
-      def call(payload, opts \\ []) do
-        opts = Keyword.put(opts, :__middleware__, __middleware__())
-        Client.call(@client, payload, opts)
-      end
+  Returning `{:ok, payload, opts, state}` will cause the
+  given payload, routing key and options to be used instead of the original
+  ones, block the client until the response is received, and enter
+  the main loop with the given state.
 
-      def stop,
-        do: Supervisor.stop(@supervisor)
+  Returning `{:ok, payload, opts, meta, state` will do the same as
+  `{:ok, payload, opts, state}`, but returned `meta` will be given as a
+  2nd argument in `on_response/3` and as a 1st argument in `on_timeout/3` callback.
 
-      def init(_) do
-        supervise(children_spec(), strategy: :rest_for_one)
-      end
+  Returning `{:reply, response, state}` will respond the client inmediately
+  without performing the request with the given response, and enter the main
+  loop again with the given state.
 
-      if @spawn_connection? do
-        use Confex, otp_app: Keyword.fetch!(opts, :otp_app)
+  Returning `{:stop, reason, response, state}` will not send the message,
+  respond to the caller with `response`, and terminate the main loop
+  and call `terminate(reason, state)` before the process exists with
+  reason `reason`.
 
-        defp children_spec do
-          [
-            worker(Freddy.Conn, [config() ++ [name: @connection]]),
-            worker(Client, [@connection, @queue, [name: @client]])
-          ]
-        end
-      else
-        defp children_spec do
-          [worker(Client, [@connection, @queue, [name: @client]])]
-        end
-      end
+  Returning `{:stop, reason, state}` will not send the message, terminate the
+  main loop and call `terminate(reason, state)` before the process exists with
+  reason `reason`.
+  """
+  @callback before_request(payload, opts :: term, state) ::
+              {:ok, state} |
+              {:ok, meta, state} |
+              {:ok, payload, opts :: term, state} |
+              {:ok, payload, opts :: term, meta, state} |
+              {:reply, response, state} |
+              {:stop, reason :: term, response, state} |
+              {:stop, reason :: term, state}
+
+  @doc """
+  Called when a response has been received, before it is delivered to the caller.
+
+  It receives as argument the message payload, the routing key, the options
+  for that publication, the response, and the internal state.
+
+  Returning `{:reply, reply, state}` will cause the given reply to be
+  delivered to the caller instead of the original response, and enter
+  the main loop with the given state.
+
+  Returning `{:noreply, state}` will enter the main loop with the given state
+  without responding to the caller (that will eventually timeout or keep blocked
+  forever if the timeout was set to `:infinity`).
+
+  Returning `{:stop, reason, reply, state}` will deliver the given reply to
+  the caller instead of the original response and call `terminate(reason, state)`
+  before the process exists with reason `reason`.
+
+  Returning `{:stop, reason, state}` not reply to the caller and call
+  `terminate(reason, state)` before the process exists with reason `reason`.
+  """
+  @callback on_response(response, meta, state) ::
+              {:reply, response, state} |
+              {:noreply, state} |
+              {:stop, reason :: term, response, state} |
+              {:stop, reason :: term, state}
+
+  @doc """
+  Called when a request has timed out.
+
+  Returning `{:reply, reply, state}` will cause the given reply to be
+  delivered to the caller, and enter the main loop with the given state.
+
+  Returning `{:noreply, state}` will enter the main loop with the given state
+  without responding to the caller (that will eventually timeout or keep blocked
+  forever if the timeout was set to `:infinity`).
+
+  Returning `{:stop, reason, reply, state}` will deliver the given reply to
+  the caller, and call `terminate(reason, state)` before the process exists
+  with reason `reason`.
+
+  Returning `{:stop, reason, state}` will not reply to the caller and call
+  `terminate(reason, state)` before the process exists with reason `reason`.
+  """
+  @callback on_timeout(meta :: term, state) ::
+              {:reply, response, state} |
+              {:noreply, state} |
+              {:stop, reason :: term, response, state} |
+              {:stop, reason :: term, state}
+
+  @doc """
+  Called when the process receives a message.
+
+  Returning `{:noreply, state}` will causes the process to enter the main loop
+  with the given state.
+
+  Returning `{:stop, reason, state}` will not send the message, terminate the
+  main loop and call `terminate(reason, state)` before the process exists with
+  reason `reason`.
+  """
+  @callback handle_info(message :: term, state) ::
+              {:noreply, state} |
+              {:stop, reason :: term, state}
+
+  @doc """
+  This callback is the same as the `GenServer` equivalent and is called when the
+  process terminates. The first argument is the reason the process is about
+  to exit with.
+  """
+  @callback terminate(reason :: term, state) ::
+              any
+
+  defmacro __using__(_opts \\ []) do
+    quote location: :keep do
+      @behaviour Freddy.RPC.Client
+
+      @doc false
+      def init(initial),
+        do: {:ok, initial}
+
+      @doc false
+      def handle_ready(_meta, state),
+        do: {:noreply, state}
+
+      def before_request(_payload, _opts, state),
+        do: {:ok, state}
+
+      def on_response(response, _meta, state),
+        do: {:reply, response, state}
+
+      def on_timeout(_meta, state),
+        do: {:reply, {:error, :timeout}, state}
+
+      def handle_info(_message, state),
+        do: {:noreply, state}
+
+      def terminate(_reason, _state),
+        do: :ok
+
+      defoverridable [init: 1, terminate: 2,
+                      handle_ready: 2, before_request: 3,
+                      on_response: 3, on_timeout: 2, handle_info: 2]
     end
   end
 
-  alias Freddy.RPC.Client.{Builder,
-                           State,
-                           Request,
-                           Middleware}
+  @behaviour Hare.RPC.Client
 
-  use Connection
-  use Builder
   require Logger
+  alias Freddy.RPC.Client.State
 
-  # Default Middleware stack
-  plug Middleware.Timeout, default: 3000
-  plug Middleware.RPCRequest
+  @default_timeout 3000
+  @gen_server_timeout 10000
 
-  @doc """
-  Start RPC Client and link to the calling process.
-
-  See `GenServer.start_link/3` for available options.
-  """
-  @spec start_link(server, queue :: String.t, opts :: start_options) :: on_start
-  def start_link(conn, queue, opts \\ []),
-    do: Connection.start_link(__MODULE__, [conn, queue], opts)
+  @type config :: [timeout: timeout,
+                   exchange: Hare.Context.Action.DeclareExchange.config,
+                   routing_key: routing_key]
 
   @doc """
-  Start RPC Client witout linking it to the calling process.
+  Starts a `Freddy.RPC.Client` process linked to the current process.
 
-  See `GenServer.start/3` for available options.
+  This function is used to start a `Freddy.RPC.Client` process in a supervision
+  tree. The process will be started by calling `init` with the given initial
+  value.
+
+  Arguments:
+
+    * `mod` - the module that defines the server callbacks (like GenServer)
+    * `conn` - the pid of a `Hare.Core.Conn` process
+    * `config` - the configuration of the RPC Client (describing the exchange, routing_key and timeout value)
+    * `initial` - the value that will be given to `init/1`
+    * `opts` - the GenServer options
   """
-  @spec start(server, queue :: String.t, opts :: start_options) :: on_start
-  def start(conn, queue, opts \\ []),
-    do: Connection.start(__MODULE__, [conn, queue], opts)
+  @spec start_link(module, GenServer.server, config, initial :: term, GenServer.options) ::
+          GenServer.on_start |
+          no_return()
+  def start_link(mod, conn, config, initial, opts \\ []) do
+    exchange = Keyword.get(config, :exchange, [])
+    routing_key = Keyword.fetch!(config, :routing_key)
+    timeout = Keyword.get(config, :timeout, @default_timeout)
 
-  @doc """
-  Synchronously perform RPC request over AMQP.
-
-  This method will return either `{:ok, result}` or `{:error, reason}`.
-  Request timeout can be specified with `:timeout` option.
-  """
-  @spec call(server, payload :: any, req_options) ::
-    {:ok, result :: any} |
-    {:error, reason :: term}
-  def call(client, payload, opts \\ []) do
-    client
-    |> Request.new(payload, opts)
-    |> Middleware.run(build_middleware_stack(opts))
+    Hare.RPC.Client.start_link(
+      __MODULE__,
+      conn,
+      [exchange: exchange, timeout: timeout],
+      {mod, timeout, routing_key, initial},
+      opts
+    )
   end
 
+  defdelegate stop(client, reason \\ :normal), to: GenServer
+
   @doc """
-  Gracefully stop RPC Client.
+  Performs a RPC request and blocks until the response arrives.
   """
-  @spec stop(server) :: :ok
-  def stop(client),
-    do: Connection.call(client, {:close, :normal})
+  @spec request(GenServer.server, payload, GenServer.options) :: response
+  def request(client, payload, opts \\ []) do
+    Hare.RPC.Client.request(client, payload, "", opts, @gen_server_timeout)
+  end
 
-  # Private API
-
-  @doc false
-  def reply_queue(client),
-    do: Connection.call(client, :reply_queue)
+  # Hare.RPC.Client callbacks
 
   @doc false
-  def destination_queue(client),
-    do: Connection.call(client, :destination_queue)
-
-  @doc false
-  def perform_request(request = %Request{client: client, payload: payload, opts: opts, env: env}) do
-    result =
-      if Map.has_key?(env, :client_timeout) do
-        Connection.call(client, {:call, payload, opts}, env[:client_timeout])
-      else
-        Connection.call(client, {:call, payload, opts})
-      end
-
-    case result do
-      {:ok, payload, opts} ->
-        %{request | payload: payload, opts: opts, status: :ok}
-
-      {:error, reason} ->
-        %{request | status: :error, error: reason}
+  def init({mod, timeout, routing_key, initial}) do
+    case mod.init(initial) do
+      {:ok, given} -> {:ok, State.new(mod, timeout, routing_key, given)}
+      {:stop, reason} -> {:stop, reason}
+      :ignore -> :ignore
     end
   end
 
   @doc false
-  def reply(client, correlation_id, response),
-    do: Connection.cast(client, {:RPC_RESPONSE, correlation_id, response})
-
-  # Connection/GenServer callbacks
-
-  def init([conn, queue]) do
-    Process.flag(:trap_exit, true)
-    {:connect, :init, State.new(conn, queue)}
-  end
-
-  def connect(:reconnect, state),
-    do: {:ok, State.reconnect(state)}
-
-  def connect(_info, state),
-    do: {:ok, State.connect(state)}
-
-  def disconnect(reason, state),
-    do: {:stop, reason, state}
-
-  def terminate(_reason, state),
-    do: State.disconnect(state)
-
-  def handle_call({:call, payload, opts}, from, state),
-    do: State.request(state, from, payload, opts)
-
-  def handle_call(:reply_queue, _from, state) do
-    {:reply, state.reply_queue, state}
-  end
-
-  def handle_call(:destination_queue, _from, state) do
-    {:reply, state.queue, state}
-  end
-
-  def handle_call({:close, reason}, _from, state),
-    do: {:disconnect, reason, :ok, state}
-
-  def handle_cast({:RPC_RESPONSE, correlation_id, response}, state) do
-    case State.reply(state, correlation_id, response) do
-      {:ok, new_state} ->
-        {:noreply, new_state}
-
-      {:error, _} ->
-        Logger.warn("Message with correlation_id #{correlation_id} received, but there is no requester")
-        {:noreply, state}
+  def handle_ready(meta, %{mod: mod, given: given} = state) do
+    case mod.handle_ready(meta, given) do
+      {:noreply, new_given} -> {:noreply, State.update(state, new_given)}
+      {:stop, reason, new_given} -> {:stop, reason, State.update(state, new_given)}
     end
   end
 
-  def handle_info({:DOWN, ref, _, _, reason}, state) do
-    if State.down?(state, ref) do
-      {:disconnect, reason, state}
-    else
-      {:noreply, state}
+  @doc false
+  def before_request(payload, _, opts, from, %{mod: mod, given: given} = state) do
+    freddy_opts = [
+      mandatory: true,
+      content_type: "application/json",
+      expiration: to_string(state.timeout),
+      type: "request"
+    ]
+
+    case mod.before_request(payload, opts, given) do
+      {:ok, new_given} ->
+        {:ok,
+          Poison.encode!(payload),
+          state.routing_key,
+          opts ++ freddy_opts,
+          state |> State.update(new_given) |> State.push_waiting(from, %{})}
+
+      {:ok, meta, new_given} ->
+        {:ok,
+          Poison.encode!(payload),
+          state.routing_key,
+          opts ++ freddy_opts,
+          state |> State.update(new_given) |> State.push_waiting(from, meta)}
+
+      {:ok, new_payload, new_opts, new_given} ->
+        {:ok,
+          Poison.encode!(new_payload),
+          state.routing_key,
+          new_opts ++ freddy_opts,
+          state |> State.update(new_given) |> State.push_waiting(from, %{})}
+
+      {:ok, new_payload, new_opts, meta, new_given} ->
+        {:ok,
+          Poison.encode!(new_payload),
+          state.routing_key,
+          new_opts ++ freddy_opts,
+          state |> State.update(new_given) |> State.push_waiting(from, meta)}
+
+      {:reply, response, new_given} ->
+        {:reply, response, State.update(state, new_given)}
+
+      {:stop, reason, response, new_given} ->
+        {:stop, reason, response, State.update(state, new_given)}
+
+      {:stop, reason, new_given} ->
+        {:stop, reason, State.update(state, new_given)}
     end
   end
 
-  # Producer or consumer notify that they have connected
-  def handle_info({:GENQUEUE_CONNECTION, {:ok, :connected}, from}, state = %{consumer: from}),
-    do: {:noreply, State.consumer_connected(state)}
+  @doc false
+  def on_response(response, from, %{mod: mod, given: given} = state) do
+    {meta, new_state} = State.pop_waiting(state, from)
 
-  def handle_info({:GENQUEUE_CONNECTION, {:ok, :connected}, from}, state = %{producer: from}),
-    do: {:noreply, State.producer_connected(state)}
-
-  def handle_info({:GENQUEUE_CONNECTION, {:ok, :connected}, _from}, state),
-    do: {:noreply, state}
-
-  def handle_info({:GENQUEUE_CONNECTION, _error, _from}, state) do
-    {:connect, :reconnect, state}
+    response
+    |> log_response(meta, state)
+    |> Poison.decode()
+    |> handle_response()
+    |> mod.on_response(meta, given)
+    |> handle_mod_callback(new_state)
   end
 
-  def handle_info({:EXIT, _from, :normal}, state),
-    do: {:noreply, state}
+  @doc false
+  def on_timeout(from, %{mod: mod, given: given} = state) do
+    {meta, new_state} = State.pop_waiting(state, from)
 
-  # Reconnect if consumer is dead
-  def handle_info({:EXIT, from, _reason}, state = %{consumer: from}),
-    do: {:connect, :reconnect, state}
+    log_timeout(meta, new_state)
 
-  # Reconnect if producer is dead
-  def handle_info({:EXIT, from, _reason}, state = %{producer: from}),
-    do: {:connect, :reconnect, state}
+    given
+    |> mod.on_timeout(meta)
+    |> handle_mod_callback(new_state)
+  end
 
-  # Ignore other EXIT messages, because they may come when Client is already restarted and recovered
-  def handle_info({:EXIT, _from, _reason}, state),
-    do: {:noreply, state}
+  @doc false
+  def handle_info(message, %{mod: mod, given: given} = state) do
+    case mod.handle_info(message, given) do
+      {:noreply, new_given} -> {:noreply, State.update(state, new_given)}
+      {:stop, reason, new_given} -> {:stop, reason, State.update(state, new_given)}
+    end
+  end
+
+  @doc false
+  def terminate(reason, %{mod: mod, given: given}) do
+    mod.terminate(reason, given)
+  end
 
   # Private functions
 
-  @core_middleware [
-    {Middleware.ErrorHandler, :call, []},
-    {__MODULE__, :perform_request}
-  ]
+  defp handle_mod_callback(response, state) do
+    case response do
+      {:reply, response, new_given} ->
+        {:reply, response, State.update(state, new_given)}
 
-  defp build_middleware_stack(opts) do
-    __middleware__() ++
-    Keyword.get(opts, :__middleware__, []) ++
-    @core_middleware
+      {:noreply, new_given} ->
+        {:noreply, State.update(state, new_given)}
+
+      {:stop, reason, response, new_given} ->
+        {:stop, reason, response, State.update(state, new_given)}
+
+      {:stop, reason, new_given} ->
+        {:stop, reason, State.update(state, new_given)}
+    end
   end
+
+  defp handle_response({:ok, %{"success" => true, "output" => result}}),
+    do: {:ok, result}
+  defp handle_response({:ok, %{"success" => true} = payload}),
+    do: {:ok, Map.delete(payload, "success")}
+  defp handle_response({:ok, %{"success" => false, "error" => error}}),
+    do: {:error, :invalid_request, error}
+  defp handle_response({:ok, %{"success" => false} = payload}),
+    do: {:error, :invalid_request, Map.delete(payload, "success")}
+  defp handle_response({:ok, payload}),
+    do: {:error, :invalid_request, payload}
+  defp handle_response({:error, json_error}),
+    do: {:error, :protocol_error, json_error}
+
+  defp log_response(response, meta, %{routing_key: queue}) do
+    Logger.debug fn ->  ["Response received from ", queue, " after #{calculate_elapsed(meta)} ms:", response] end
+    response
+  end
+
+  defp log_timeout(meta, %{routing_key: queue}),
+    do: Logger.error fn -> ["RPC call to ", queue, " timed out after #{calculate_elapsed(meta)} ms"] end
+
+  defp calculate_elapsed(%{start_time: start_time, stop_time: stop_time}),
+    do: System.convert_time_unit(stop_time - start_time, :native, :milliseconds)
+  defp calculate_elapsed(_),
+    do: :unknown
 end
