@@ -11,7 +11,7 @@ defmodule Freddy.Notifications.Broadcaster do
     quote location: :keep do
       use Freddy.Publisher
 
-      defdelegate broadcast(broadcaster, routing_key, payload, opts \\ []), to: Freddy.Broadcaster
+      defdelegate broadcast(broadcaster, routing_key, payload, opts \\ []), to: Freddy.Notifications.Broadcaster
     end
   end
 
