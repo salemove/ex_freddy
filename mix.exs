@@ -36,7 +36,7 @@ defmodule Freddy.Mixfile do
   # Type "mix help deps" for more examples and options
   defp deps do
     [
-      {:hare, git: "https://github.com/take-five/hare"},
+      {:hare, git: "https://github.com/jcabotc/hare"},
       {:amqp, "~> 0.2.0"},
       {:poison, ">= 2.0.0"},
 
