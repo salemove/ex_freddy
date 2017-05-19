@@ -2,7 +2,7 @@
   "amqp_client": {:hex, :amqp_client, "3.6.9", "076d7c68abc670d1bb44bbc357e4fba991a3ab53ce6160ec43576c653849a643", [:make, :rebar3], [{:rabbit_common, "3.6.9", [hex: :rabbit_common, repo: "hexpm", optional: false]}], "hexpm"},
   "connection": {:hex, :connection, "1.0.4", "a1cae72211f0eef17705aaededacac3eb30e6625b04a6117c1b2db6ace7d5976", [:mix], [], "hexpm"},
   "dialyxir": {:hex, :dialyxir, "0.5.0", "5bc543f9c28ecd51b99cc1a685a3c2a1a93216990347f259406a910cf048d1d7", [:mix], [], "hexpm"},
-  "hare": {:git, "https://github.com/jcabotc/hare", "fd10ab61f1f538e54e2de6912cdacb32f77b2f41", []},
+  "hare": {:git, "https://github.com/take-five/hare", "0b8111ff5fbc3ce4e2455b9fb70b29a4505d65b4", []},
   "meck": {:hex, :meck, "0.8.4", "59ca1cd971372aa223138efcf9b29475bde299e1953046a0c727184790ab1520", [:make, :rebar], [], "hexpm"},
   "mock": {:hex, :mock, "0.2.1", "bfdba786903e77f9c18772dee472d020ceb8ef000783e737725a4c8f54ad28ec", [:mix], [{:meck, "~> 0.8.2", [hex: :meck, repo: "hexpm", optional: false]}], "hexpm"},
   "poison": {:hex, :poison, "3.1.0", "d9eb636610e096f86f25d9a46f35a9facac35609a7591b3be3326e99a0484665", [:mix], [], "hexpm"},

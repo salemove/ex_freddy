@@ -92,8 +92,8 @@ defmodule Freddy.Consumer do
   the message with the given opts.
 
   Returning `{:noreply, state}` will do nothing, and therefore the message should
-  be acknowledged by using `Hare.Consumer.ack/2`, `Hare.Consumer.nack/2` or
-  `Hare.Consumer.reject/2`.
+  be acknowledged by using `Freddy.Consumer.ack/2`, `Freddy.Consumer.nack/2` or
+  `Freddy.Consumer.reject/2`.
 
   Returning `{:stop, reason, state}` will terminate the main loop and call
   `terminate(reason, state)` before the process exists with reason `reason`.
@@ -119,8 +119,8 @@ defmodule Freddy.Consumer do
   the message with the given opts.
 
   Returning `{:noreply, state}` will do nothing, and therefore the message should
-  be acknowledged by using `Hare.Consumer.ack/2`, `Hare.Consumer.nack/2` or
-  `Hare.Consumer.reject/2`.
+  be acknowledged by using `Freddy.Consumer.ack/2`, `Freddy.Consumer.nack/2` or
+  `Freddy.Consumer.reject/2`.
 
   Returning `{:stop, reason, state}` will terminate the main loop and call
   `terminate(reason, state)` before the process exists with reason `reason`.
@@ -129,6 +129,29 @@ defmodule Freddy.Consumer do
               {:reply, action, state} |
               {:reply, action, opts :: Keyword.t, state} |
               {:noreply, state} |
+              {:stop, reason :: term, state}
+
+  @doc """
+  Called when the process receives a call message sent by `call/3`. This
+  callback has the same arguments as the `GenServer` equivalent and the
+  `:reply`, `:noreply` and `:stop` return tuples behave the same.
+  """
+  @callback handle_call(request :: term, GenServer.from, state) ::
+              {:reply, reply :: term, state} |
+              {:reply, reply :: term, state, timeout | :hibernate} |
+              {:noreply, state} |
+              {:noreply, state, timeout | :hibernate} |
+              {:stop, reason :: term, state} |
+              {:stop, reason :: term, reply :: term, state}
+
+  @doc """
+  Called when the process receives a cast message sent by `cast/3`. This
+  callback has the same arguments as the `GenServer` equivalent and the
+  `:noreply` and `:stop` return tuples behave the same.
+  """
+  @callback handle_cast(request :: term, state) ::
+              {:noreply, state} |
+              {:noreply, state, timeout | :hibernate} |
               {:stop, reason :: term, state}
 
   @doc """
@@ -177,6 +200,14 @@ defmodule Freddy.Consumer do
         do: {:reply, :reject, state}
 
       @doc false
+      def handle_call(message, _from, state),
+        do: {:stop, {:bad_call, message}, state}
+
+      @doc false
+      def handle_cast(_message, state),
+        do: {:noreply, state}
+
+      @doc false
       def handle_info(_message, state),
         do: {:noreply, state}
 
@@ -218,6 +249,9 @@ defmodule Freddy.Consumer do
   end
 
   defdelegate stop(consumer, reason \\ :normal), to: GenServer
+  defdelegate ack(meta, opts \\ []), to: Hare.Consumer
+  defdelegate nack(meta, opts \\ []), to: Hare.Consumer
+  defdelegate reject(meta, opts \\ []), to: Hare.Consumer
 
   # Hare.Consumer callbacks implementation
 
@@ -247,6 +281,27 @@ defmodule Freddy.Consumer do
   end
 
   @doc false
+  def handle_call(message, from, {mod, state}) do
+    case mod.handle_call(message, from, state) do
+      {:reply, reply, new_state} -> {:reply, reply, {mod, new_state}}
+      {:reply, reply, new_state, timeout} -> {:reply, reply, {mod, new_state}, timeout}
+      {:noreply, new_state} -> {:noreply, {mod, new_state}}
+      {:noreply, new_state, timeout} -> {:noreply, {mod, new_state}, timeout}
+      {:stop, reason, new_state} -> {:stop, reason, {mod, new_state}}
+      {:stop, reason, reply, new_state} -> {:stop, reason, reply, {mod, new_state}}
+    end
+  end
+
+  @doc false
+  def handle_cast(message, {mod, state}) do
+    case mod.handle_cast(message, state) do
+      {:noreply, new_state} -> {:noreply, {mod, new_state}}
+      {:noreply, new_state, timeout} -> {:noreply, {mod, new_state}, timeout}
+      {:stop, reason, new_state} -> {:stop, reason, {mod, new_state}}
+    end
+  end
+
+  @doc false
   def handle_info(meta, {mod, state}) do
     meta
     |> mod.handle_info(state)
@@ -272,7 +327,7 @@ defmodule Freddy.Consumer do
       {:reply, action, state} when action in @reply_actions ->
         {:reply, action, {mod, state}}
 
-      {:ok, action, options, state} when action in @reply_actions ->
+      {:reply, action, options, state} when action in @reply_actions ->
         {:reply, action, options, {mod, state}}
 
       {:noreply, state} ->
