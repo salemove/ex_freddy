@@ -308,6 +308,10 @@ defmodule Freddy.Consumer do
     |> handle_mod_response(mod)
   end
 
+  @doc false
+  def terminate(reason, {mod, state}),
+    do: mod.terminate(reason, state)
+
   defp handle_mod_message(message, meta, mod, state) do
     message
     |> mod.handle_message(meta, state)
