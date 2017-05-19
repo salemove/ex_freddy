@@ -244,10 +244,19 @@ defmodule Freddy.Consumer do
     * `opts` - the GenServer options
   """
   @spec start_link(module, connection, config, initial :: term, GenServer.options) :: GenServer.on_start
-  def start_link(mod, connection, config, initial, opts \\ []) do
-    Hare.Consumer.start_link(__MODULE__, connection, build_consumer_config(config), {mod, initial}, opts)
-  end
+  def start_link(mod, connection, config, initial, opts \\ []),
+    do: Hare.Consumer.start_link(__MODULE__, connection, build_consumer_config(config), {mod, initial}, opts)
 
+  @doc """
+  Gracefully terminate given `consumer`. The consumer will send "cancel" message
+  to AMQP broker and will close after receiving "cancel_ok" message back.
+  """
+  @spec cancel(GenServer.server, [nowait: boolean]) :: :ok
+  def cancel(consumer, opts \\ []),
+    do: call(consumer, {:"$freddy_cancel", opts})
+
+  defdelegate call(consumer, message, timeout \\ 5000), to: GenServer
+  defdelegate cast(consumer, message), to: GenServer
   defdelegate stop(consumer, reason \\ :normal), to: GenServer
   defdelegate ack(meta, opts \\ []), to: Hare.Consumer
   defdelegate nack(meta, opts \\ []), to: Hare.Consumer
@@ -258,22 +267,22 @@ defmodule Freddy.Consumer do
   @doc false
   def init({mod, initial}) do
     case mod.init(initial) do
-      {:ok, state} -> {:ok, {mod, state}}
+      {:ok, state} -> {:ok, {mod, nil, state}}
       :ignore -> :ignore
       {:stop, reason} -> {:stop, reason}
     end
   end
 
   @doc false
-  def handle_ready(meta, {mod, state}) do
+  def handle_ready(%{queue: queue} = meta, {mod, _, state}) do
     case mod.handle_ready(meta, state) do
-      {:noreply, new_state} -> {:noreply, {mod, new_state}}
-      {:stop, reason, new_state} -> {:stop, reason, {mod, new_state}}
+      {:noreply, new_state} -> {:noreply, {mod, queue, new_state}}
+      {:stop, reason, new_state} -> {:stop, reason, {mod, queue, new_state}}
     end
   end
 
   @doc false
-  def handle_message(payload, meta, {mod, state}) do
+  def handle_message(payload, meta, {mod, _queue, state}) do
     case Poison.decode(payload) do
       {:ok, decoded} -> handle_mod_message(decoded, meta, mod, state)
       error -> handle_mod_error(error, payload, meta, mod, state)
@@ -281,64 +290,72 @@ defmodule Freddy.Consumer do
   end
 
   @doc false
-  def handle_call(message, from, {mod, state}) do
+  def handle_call({:"$freddy_cancel", _opts}, _from, {_mod, nil, _given} = state),
+    do: {:stop, :cancelled, :ok, state}
+  def handle_call({:"$freddy_cancel", opts}, _from, {mod, queue, given}) do
+    {:ok, new_queue} = Hare.Core.Queue.cancel(queue, opts)
+    {:reply, :ok, {mod, new_queue, given}}
+  end
+
+  @doc false
+  def handle_call(message, from, {mod, queue, state}) do
     case mod.handle_call(message, from, state) do
-      {:reply, reply, new_state} -> {:reply, reply, {mod, new_state}}
-      {:reply, reply, new_state, timeout} -> {:reply, reply, {mod, new_state}, timeout}
-      {:noreply, new_state} -> {:noreply, {mod, new_state}}
-      {:noreply, new_state, timeout} -> {:noreply, {mod, new_state}, timeout}
-      {:stop, reason, new_state} -> {:stop, reason, {mod, new_state}}
-      {:stop, reason, reply, new_state} -> {:stop, reason, reply, {mod, new_state}}
+      {:reply, reply, new_state} -> {:reply, reply, {mod, queue, new_state}}
+      {:reply, reply, new_state, timeout} -> {:reply, reply, {mod, queue, new_state}, timeout}
+      {:noreply, new_state} -> {:noreply, {mod, queue, new_state}}
+      {:noreply, new_state, timeout} -> {:noreply, {mod, queue, new_state}, timeout}
+      {:stop, reason, new_state} -> {:stop, reason, {mod, queue, new_state}}
+      {:stop, reason, reply, new_state} -> {:stop, reason, reply, {mod, queue, new_state}}
     end
   end
 
   @doc false
-  def handle_cast(message, {mod, state}) do
+  def handle_cast(message, {mod, queue, state}) do
     case mod.handle_cast(message, state) do
-      {:noreply, new_state} -> {:noreply, {mod, new_state}}
-      {:noreply, new_state, timeout} -> {:noreply, {mod, new_state}, timeout}
-      {:stop, reason, new_state} -> {:stop, reason, {mod, new_state}}
+      {:noreply, new_state} -> {:noreply, {mod, queue, new_state}}
+      {:noreply, new_state, timeout} -> {:noreply, {mod, queue, new_state}, timeout}
+      {:stop, reason, new_state} -> {:stop, reason, {mod, queue, new_state}}
     end
   end
 
   @doc false
-  def handle_info(meta, {mod, state}) do
+  def handle_info(meta, {mod, queue, state}) do
     meta
     |> mod.handle_info(state)
-    |> handle_mod_response(mod)
+    |> handle_mod_response(mod, queue)
   end
 
   @doc false
-  def terminate(reason, {mod, state}),
+  def terminate(reason, {mod, _queue, state}),
     do: mod.terminate(reason, state)
 
-  defp handle_mod_message(message, meta, mod, state) do
+  defp handle_mod_message(message, %{queue: queue} = meta, mod, state) do
     message
     |> mod.handle_message(meta, state)
-    |> handle_mod_response(mod)
+    |> handle_mod_response(mod, queue)
   end
 
-  defp handle_mod_error(error, payload, meta, mod, state) do
+  defp handle_mod_error(error, payload, %{queue: queue} = meta, mod, state) do
     error
     |> mod.handle_error(payload, meta, state)
-    |> handle_mod_response(mod)
+    |> handle_mod_response(mod, queue)
   end
 
   @reply_actions [:ack, :nack, :reject]
 
-  defp handle_mod_response(response, mod) do
+  defp handle_mod_response(response, mod, queue) do
     case response do
       {:reply, action, state} when action in @reply_actions ->
-        {:reply, action, {mod, state}}
+        {:reply, action, {mod, queue, state}}
 
       {:reply, action, options, state} when action in @reply_actions ->
-        {:reply, action, options, {mod, state}}
+        {:reply, action, options, {mod, queue, state}}
 
       {:noreply, state} ->
-        {:noreply, {mod, state}}
+        {:noreply, {mod, queue, state}}
 
       {:stop, reason, state} ->
-        {:stop, reason, {mod, state}}
+        {:stop, reason, {mod, queue, state}}
     end
   end
 

@@ -44,6 +44,10 @@ defmodule Freddy.ConsumerTest do
 
       {:noreply, pid}
     end
+
+    def terminate(reason, pid) do
+      send(pid, {:terminated, reason})
+    end
   end
 
   describe "consumer initialization" do
@@ -130,6 +134,20 @@ defmodule Freddy.ConsumerTest do
       assert_receive {:info, :some_message}
 
       tear_down(consumer)
+    end
+
+    test "consumer stops after receives cancel message", %{conn: conn, history: history} do
+      consumer = start_consumer(conn)
+      Process.unlink(consumer)
+
+      assert :ok == Freddy.Consumer.cancel(consumer)
+      assert {:cancel, [_chan, tag, []], :ok} = Adapter.Backdoor.last_event(history)
+
+      send(consumer, {:cancel_ok, %{consumer_tag: tag}})
+      assert_receive {:terminated, {:shutdown, :cancelled}}
+
+      Process.sleep(20)
+      refute Process.alive?(consumer)
     end
 
     defp start_consumer(conn) do
