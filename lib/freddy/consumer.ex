@@ -291,7 +291,7 @@ defmodule Freddy.Consumer do
 
   @doc false
   def handle_call({:"$freddy_cancel", _opts}, _from, {_mod, nil, _given} = state),
-    do: {:stop, :cancelled, :ok, state}
+    do: {:stop, {:shutdown, :cancelled}, :ok, state}
   def handle_call({:"$freddy_cancel", opts}, _from, {mod, queue, given}) do
     {:ok, new_queue} = Hare.Core.Queue.cancel(queue, opts)
     {:reply, :ok, {mod, new_queue, given}}
