@@ -11,6 +11,7 @@ defmodule Freddy.Consumer do
         config = [
           exchange: [name: "freddy-topic", type: :topic],
           queue: [name: "notifications-queue", opts: [auto_delete: true]],
+          qos: [prefetch_count: 10], # optional
           routing_keys: ["routing_key1", "routing_key2"], # short way to declare binds
           binds: [ # fully customizable bindings
             [routing_key: "routing_key3", no_wait: true]
@@ -225,6 +226,7 @@ defmodule Freddy.Consumer do
 
   @type config :: [queue:        Hare.Context.Action.DeclareQueue.config,
                    exchange:     Hare.Context.Action.DeclareExchange.config,
+                   qos:          Hare.Context.Action.Qos.config,
                    routing_keys: [String.t],
                    binds:        [Keyword.t]]
 
@@ -247,16 +249,8 @@ defmodule Freddy.Consumer do
   def start_link(mod, connection, config, initial, opts \\ []),
     do: Hare.Consumer.start_link(__MODULE__, connection, build_consumer_config(config), {mod, initial}, opts)
 
-  @doc """
-  Gracefully terminate given `consumer`. The consumer will send "cancel" message
-  to AMQP broker and will close after receiving "cancel_ok" message back.
-  """
-  @spec cancel(GenServer.server, [nowait: boolean]) :: :ok
-  def cancel(consumer, opts \\ []),
-    do: call(consumer, {:"$freddy_cancel", opts})
-
-  defdelegate call(consumer, message, timeout \\ 5000), to: GenServer
-  defdelegate cast(consumer, message), to: GenServer
+  defdelegate call(consumer, message, timeout \\ 5000), to: Hare.Consumer
+  defdelegate cast(consumer, message), to: Hare.Consumer
   defdelegate stop(consumer, reason \\ :normal), to: GenServer
   defdelegate ack(meta, opts \\ []), to: Hare.Consumer
   defdelegate nack(meta, opts \\ []), to: Hare.Consumer
@@ -287,14 +281,6 @@ defmodule Freddy.Consumer do
       {:ok, decoded} -> handle_mod_message(decoded, meta, mod, state)
       error -> handle_mod_error(error, payload, meta, mod, state)
     end
-  end
-
-  @doc false
-  def handle_call({:"$freddy_cancel", _opts}, _from, {_mod, nil, _given} = state),
-    do: {:stop, {:shutdown, :cancelled}, :ok, state}
-  def handle_call({:"$freddy_cancel", opts}, _from, {mod, queue, given}) do
-    {:ok, new_queue} = Hare.Core.Queue.cancel(queue, opts)
-    {:reply, :ok, {mod, new_queue, given}}
   end
 
   @doc false
@@ -362,6 +348,7 @@ defmodule Freddy.Consumer do
   defp build_consumer_config(config) do
     queue = Keyword.fetch!(config, :queue)
     exchange = Keyword.fetch!(config, :exchange)
+    qos = Keyword.get(config, :qos)
 
     routing_keys =
       config
@@ -375,7 +362,8 @@ defmodule Freddy.Consumer do
 
     [
       queue: queue,
-      exchange: exchange
+      exchange: exchange,
+      qos: qos
     ] ++ routing_keys ++ custom_binds
   end
 end

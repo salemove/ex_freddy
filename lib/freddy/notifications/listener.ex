@@ -58,5 +58,5 @@ defmodule Freddy.Notifications.Listener do
     Freddy.Consumer.start_link(mod, conn, config, initial, opts)
   end
 
-  defdelegate stop(consumer, reason \\ :normal), to: GenServer
+  defdelegate stop(consumer, reason \\ :normal), to: Freddy.Consumer
 end

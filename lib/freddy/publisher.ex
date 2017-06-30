@@ -180,15 +180,11 @@ defmodule Freddy.Publisher do
     Hare.Publisher.start_link(__MODULE__, conn, config, {mod, initial}, opts)
   end
 
+  defdelegate publish(publisher, payload, routing_key \\ "", opts \\ []), to: Hare.Publisher
+  defdelegate call(publisher, message),           to: Hare.Publisher
+  defdelegate call(publisher, message, timeout),  to: Hare.Publisher
+  defdelegate cast(publisher, message),           to: Hare.Publisher
   defdelegate stop(publisher, reason \\ :normal), to: GenServer
-
-  @doc """
-  Publishes a message to an exchange through the `Freddy.Publisher` process.
-  """
-  @spec publish(GenServer.server, payload, routing_key, opts) :: :ok
-  def publish(publisher, payload, routing_key \\ "", opts \\ []) do
-    Hare.Actor.cast(publisher, {:"$hare_publication", payload, routing_key, opts})
-  end
 
   # Hare.Publisher callbacks
 
