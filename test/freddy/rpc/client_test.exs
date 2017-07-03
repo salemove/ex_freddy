@@ -35,6 +35,9 @@ defmodule Freddy.RPC.ClientTest do
             {:consume,
               [channel, resp_queue_name, ^rpc_client, [no_ack: true]],
               {:ok, _consumer_tag}},
+            {:register_return_handler,
+              [channel, ^rpc_client],
+              :ok},
             {:publish,
               [channel, "" = _exchange, ^expected_payload, "TestQueue", [
                 mandatory: true,
@@ -44,7 +47,7 @@ defmodule Freddy.RPC.ClientTest do
                 reply_to: resp_queue_name,
                 correlation_id: correlation_id
               ]],
-              :ok}] = Adapter.Backdoor.last_events(history, 5)
+              :ok}] = Adapter.Backdoor.last_events(history, 6)
 
     response_payload = ~s[{"success":true,"output":42}]
 

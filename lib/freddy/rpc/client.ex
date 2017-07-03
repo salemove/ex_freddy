@@ -215,7 +215,7 @@ defmodule Freddy.RPC.Client do
     end
   end
 
-  @behaviour Hare.RPC.Client
+  use Hare.RPC.Client
 
   require Logger
   alias Freddy.RPC.Client.State
@@ -259,6 +259,9 @@ defmodule Freddy.RPC.Client do
     )
   end
 
+  defdelegate call(client, message),           to: Hare.RPC.Client
+  defdelegate call(client, message, timeout),  to: Hare.RPC.Client
+  defdelegate cast(client, message),           to: Hare.RPC.Client
   defdelegate stop(client, reason \\ :normal), to: GenServer
 
   @doc """
@@ -364,6 +367,13 @@ defmodule Freddy.RPC.Client do
   end
 
   @doc false
+  def on_return(from, state) do
+    {meta, new_state} = State.pop_waiting(state, from)
+    log_return(meta, new_state)
+    {:reply, {:error, :no_route}, new_state}
+  end
+
+  @doc false
   def handle_info(message, %{mod: mod, given: given} = state) do
     case mod.handle_info(message, given) do
       {:noreply, new_given} -> {:noreply, State.update(state, new_given)}
@@ -414,6 +424,9 @@ defmodule Freddy.RPC.Client do
 
   defp log_timeout(meta, %{routing_key: queue}),
     do: Logger.error fn -> ["RPC call to ", queue, " timed out after #{calculate_elapsed(meta)} ms"] end
+
+  defp log_return(_meta, %{routing_key: queue}),
+    do: Logger.error fn -> ["RPC call to ", queue, " couldn't be routed"] end
 
   defp calculate_elapsed(%{start_time: start_time, stop_time: stop_time}),
     do: System.convert_time_unit(stop_time - start_time, :native, :milliseconds)
