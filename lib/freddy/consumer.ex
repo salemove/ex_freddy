@@ -4,36 +4,36 @@ defmodule Freddy.Consumer do
 
   Example:
 
-    defmodule Notifications.Listener do
-      use Freddy.Consumer
+      defmodule Notifications.Listener do
+        use Freddy.Consumer
 
-      def start_link(conn, initial \\ nil, opts \\ []) do
-        config = [
-          exchange: [name: "freddy-topic", type: :topic],
-          queue: [name: "notifications-queue", opts: [auto_delete: true]],
-          qos: [prefetch_count: 10], # optional
-          routing_keys: ["routing_key1", "routing_key2"], # short way to declare binds
-          binds: [ # fully customizable bindings
-            [routing_key: "routing_key3", no_wait: true]
+        def start_link(conn, initial \\ nil, opts \\ []) do
+          config = [
+            exchange: [name: "freddy-topic", type: :topic],
+            queue: [name: "notifications-queue", opts: [auto_delete: true]],
+            qos: [prefetch_count: 10], # optional
+            routing_keys: ["routing_key1", "routing_key2"], # short way to declare binds
+            binds: [ # fully customizable bindings
+              [routing_key: "routing_key3", no_wait: true]
+            ]
           ]
-        ]
-        Freddy.Consumer.start_link(__MODULE__, conn, config, initial, opts)
-      end
+          Freddy.Consumer.start_link(__MODULE__, conn, config, initial, opts)
+        end
 
-      def init(initial) do
-        # do something on init
-        {:ok, initial}
-      end
+        def init(initial) do
+          # do something on init
+          {:ok, initial}
+        end
 
-      def handle_message(payload, %{routing_key: "visitor.status.disconnect"}, state) do
-        {:reply, :ack, state}
-      end
+        def handle_message(payload, %{routing_key: "visitor.status.disconnect"}, state) do
+          {:reply, :ack, state}
+        end
 
-      def handle_error(error, message, _meta) do
-        # log error?
-        {:reply, :nack, state}
+        def handle_error(error, message, _meta) do
+          # log error?
+          {:reply, :nack, state}
+        end
       end
-    end
   """
 
   @type payload :: term
@@ -72,7 +72,7 @@ defmodule Freddy.Consumer do
   with the given state.
 
   Returning `{:stop, reason, state}` will terminate the main loop and call
-  `terminate(reason, state)` before the process exists with reason `reason`.
+  `terminate(reason, state)` before the process exits with reason `reason`.
   """
   @callback handle_ready(meta, state) ::
               {:noreply, state} |
@@ -97,7 +97,7 @@ defmodule Freddy.Consumer do
   `Freddy.Consumer.reject/2`.
 
   Returning `{:stop, reason, state}` will terminate the main loop and call
-  `terminate(reason, state)` before the process exists with reason `reason`.
+  `terminate(reason, state)` before the process exits with reason `reason`.
   """
   @callback handle_message(payload, meta, state) ::
               {:reply, action, state} |
@@ -124,7 +124,7 @@ defmodule Freddy.Consumer do
   `Freddy.Consumer.reject/2`.
 
   Returning `{:stop, reason, state}` will terminate the main loop and call
-  `terminate(reason, state)` before the process exists with reason `reason`.
+  `terminate(reason, state)` before the process exits with reason `reason`.
   """
   @callback handle_error(error, payload, meta, state) ::
               {:reply, action, state} |
@@ -162,7 +162,7 @@ defmodule Freddy.Consumer do
   with the given state.
 
   Returning `{:stop, reason, state}` will not send the message, terminate the
-  main loop and call `terminate(reason, state)` before the process exists with
+  main loop and call `terminate(reason, state)` before the process exits with
   reason `reason`.
   """
   @callback handle_info(term, state) ::

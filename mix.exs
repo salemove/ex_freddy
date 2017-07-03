@@ -3,12 +3,13 @@ defmodule Freddy.Mixfile do
 
   def project do
     [app: :freddy,
-     version: "1.0.0",
+     version: "0.9.0",
      elixir: "~> 1.4",
      elixirc_paths: elixirc_paths(Mix.env),
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
      deps: deps(),
+     package: package(),
      dialyzer: [
        flags: [:error_handling, :race_conditions, :underspecs]]
     ]
@@ -18,7 +19,7 @@ defmodule Freddy.Mixfile do
   #
   # Type "mix help compile.app" for more information
   def application do
-    [applications: [:logger, :hare, :amqp, :poison]]
+    [extra_applications: [:logger]]
   end
 
   # Specifies which paths to compile per environment.
@@ -41,7 +42,14 @@ defmodule Freddy.Mixfile do
       {:poison, ">= 2.0.0"},
 
       {:mock, "~> 0.2.0", only: :test},
+      {:ex_doc, ">= 0.0.0", only: :dev},
       {:dialyxir, "~> 0.5", only: :dev, runtime: false}
     ]
+  end
+
+  defp package do
+    [maintainers: ["SaleMove TechMovers"],
+     licenses: ["MIT"],
+     links: %{"GitHub" => "https://github.com/salemove/ex_freddy"}]
   end
 end

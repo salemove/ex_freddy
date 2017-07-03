@@ -6,18 +6,18 @@ defmodule Freddy.Notifications.Listener do
 
   Example:
 
-    defmodule Notifications.Listener do
-      use Freddy.Notifications.Listener
+      defmodule Notifications.Listener do
+        use Freddy.Notifications.Listener
 
-      @config [
-        queue: [name: "myapp-notifications", opts: [auto_delete: true]],
-        routing_keys: ["broadcast.*"]
-      ]
+        @config [
+          queue: [name: "myapp-notifications", opts: [auto_delete: true]],
+          routing_keys: ["broadcast.*"]
+        ]
 
-      def start_link(conn, initial) do
-        Freddy.Notifications.Listener.start_link(__MODULE__, conn, @config, initial)
+        def start_link(conn, initial) do
+          Freddy.Notifications.Listener.start_link(__MODULE__, conn, @config, initial)
+        end
       end
-    end
 
   See also documentation for `Freddy.Consumer`
   """

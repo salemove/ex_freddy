@@ -4,18 +4,18 @@ defmodule Freddy.RPC.Client do
 
   Example:
 
-    defmodule Tracktor do
-      use Freddy.RPC.Client
+      defmodule PaymentsService do
+        use Freddy.RPC.Client
 
-      @config [routing_key: "Tracktor", timeout: 3500]
+        @config [routing_key: "Payments", timeout: 3500]
 
-      def start_link(conn, initial, opts \\ []) do
-        Freddy.RPC.Client.start_link(__MODULE__, conn, @config, initial, opts)
+        def start_link(conn, initial, opts \\ []) do
+          Freddy.RPC.Client.start_link(__MODULE__, conn, @config, initial, opts)
+        end
       end
-    end
 
-    {:ok, client} = Tracktor.start_link()
-    Tracktor.request(client, %{type: "get_operators", site_id: "xxx"})
+      {:ok, client} = PaymentsService.start_link()
+      PaymentsService.request(client, %{type: "get_history", site_id: "xxx"})
   """
 
   @type payload     :: term
@@ -58,7 +58,7 @@ defmodule Freddy.RPC.Client do
   with the given state.
 
   Returning `{:stop, reason, state}` will not send the message, terminate the
-  main loop and call `terminate(reason, state)` before the process exists with
+  main loop and call `terminate(reason, state)` before the process exits with
   reason `reason`.
   """
   @callback handle_ready(meta, state) ::
@@ -94,11 +94,11 @@ defmodule Freddy.RPC.Client do
 
   Returning `{:stop, reason, response, state}` will not send the message,
   respond to the caller with `response`, and terminate the main loop
-  and call `terminate(reason, state)` before the process exists with
+  and call `terminate(reason, state)` before the process exits with
   reason `reason`.
 
   Returning `{:stop, reason, state}` will not send the message, terminate the
-  main loop and call `terminate(reason, state)` before the process exists with
+  main loop and call `terminate(reason, state)` before the process exits with
   reason `reason`.
   """
   @callback before_request(payload, opts :: term, state) ::
@@ -126,10 +126,10 @@ defmodule Freddy.RPC.Client do
 
   Returning `{:stop, reason, reply, state}` will deliver the given reply to
   the caller instead of the original response and call `terminate(reason, state)`
-  before the process exists with reason `reason`.
+  before the process exits with reason `reason`.
 
   Returning `{:stop, reason, state}` not reply to the caller and call
-  `terminate(reason, state)` before the process exists with reason `reason`.
+  `terminate(reason, state)` before the process exits with reason `reason`.
   """
   @callback on_response(response, meta, state) ::
               {:reply, response, state} |
@@ -148,11 +148,11 @@ defmodule Freddy.RPC.Client do
   forever if the timeout was set to `:infinity`).
 
   Returning `{:stop, reason, reply, state}` will deliver the given reply to
-  the caller, and call `terminate(reason, state)` before the process exists
+  the caller, and call `terminate(reason, state)` before the process exits
   with reason `reason`.
 
   Returning `{:stop, reason, state}` will not reply to the caller and call
-  `terminate(reason, state)` before the process exists with reason `reason`.
+  `terminate(reason, state)` before the process exits with reason `reason`.
   """
   @callback on_timeout(meta :: term, state) ::
               {:reply, response, state} |
@@ -167,7 +167,7 @@ defmodule Freddy.RPC.Client do
   with the given state.
 
   Returning `{:stop, reason, state}` will not send the message, terminate the
-  main loop and call `terminate(reason, state)` before the process exists with
+  main loop and call `terminate(reason, state)` before the process exits with
   reason `reason`.
   """
   @callback handle_info(message :: term, state) ::

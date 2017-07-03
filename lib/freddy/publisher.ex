@@ -8,30 +8,28 @@ defmodule Freddy.Publisher do
 
   An example `Freddy.Publisher` process that only sends every other message:
 
-  ```
-  defmodule MyPublisher do
-    use Freddy.Publisher
+      defmodule MyPublisher do
+        use Freddy.Publisher
 
-    def start_link(conn, config, opts \\ []) do
-      Hare.Publisher.start_link(__MODULE__, conn, config, :ok, opts)
-    end
+        def start_link(conn, config, opts \\ []) do
+          Hare.Publisher.start_link(__MODULE__, conn, config, :ok, opts)
+        end
 
-    def publish(publisher, payload, routing_key) do
-      Hare.Publisher.publish(publisher, payload, routing_key)
-    end
+        def publish(publisher, payload, routing_key) do
+          Hare.Publisher.publish(publisher, payload, routing_key)
+        end
 
-    def init(:ok) do
-      {:ok, %{last_ignored: false}}
-    end
+        def init(:ok) do
+          {:ok, %{last_ignored: false}}
+        end
 
-    def before_publication(_payload, _routing_key, _opts, %{last_ignored: false}) do
-      {:ignore, %{last_ignored: true}}
-    end
-    def before_publication(_payload, _routing_key, _opts, %{last_ignored: true}) do
-      {:ok, %{last_ignored: false}}
-    end
-  end
-  ```
+        def before_publication(_payload, _routing_key, _opts, %{last_ignored: false}) do
+          {:ignore, %{last_ignored: true}}
+        end
+        def before_publication(_payload, _routing_key, _opts, %{last_ignored: true}) do
+          {:ok, %{last_ignored: false}}
+        end
+      end
 
   ## Channel handling
 
@@ -100,7 +98,7 @@ defmodule Freddy.Publisher do
   again with the given state.
 
   Returning `{:stop, reason, state}` will not send the message, terminate the
-  main loop and call `terminate(reason, state)` before the process exists with
+  main loop and call `terminate(reason, state)` before the process exits with
   reason `reason`.
   """
   @callback before_publication(payload, routing_key, opts :: term, state) ::
@@ -116,7 +114,7 @@ defmodule Freddy.Publisher do
   with the given state.
 
   Returning `{:stop, reason, state}` will not send the message, terminate the
-  main loop and call `terminate(reason, state)` before the process exists with
+  main loop and call `terminate(reason, state)` before the process exits with
   reason `reason`.
   """
   @callback handle_info(message :: term, state) ::
