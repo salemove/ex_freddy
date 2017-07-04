@@ -10,6 +10,7 @@ defmodule Freddy.Mixfile do
      start_permanent: Mix.env == :prod,
      deps: deps(),
      package: package(),
+     description: "JSON RPC Client/Server, JSON Publisher-Subscriber over AMQP",
      dialyzer: [
        flags: [:error_handling, :race_conditions, :underspecs]]
     ]
