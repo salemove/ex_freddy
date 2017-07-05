@@ -9,6 +9,14 @@ defmodule Freddy.RPC.ClientTest do
     def start_link(conn, config, initial, opts \\ []) do
       Client.start_link(__MODULE__, conn, config, initial, opts)
     end
+
+    def get_state(client) do
+      Client.call(client, :get_state)
+    end
+
+    def handle_call(:get_state, _from, state) do
+      {:reply, state, state}
+    end
   end
 
   test "sends request to specified queue", %{conn: conn, history: history} do
@@ -57,17 +65,21 @@ defmodule Freddy.RPC.ClientTest do
   end
 
   test "returns `{:error, :timeout}` on timeouts", %{conn: conn} do
-    rpc_client = start_client(conn, [routing_key: "TestQueue", timeout: 1])
+    rpc_client = start_client(conn, [routing_key: "TestQueue", timeout: 1], :given_state)
+    assert :given_state == TestClient.get_state(rpc_client)
+
     request = Task.async fn ->
       Freddy.RPC.Client.request(rpc_client, %{})
     end
 
     assert {:ok, result} = Task.yield(request, 100)
     assert {:error, :timeout} == result
+
+    assert :given_state == TestClient.get_state(rpc_client)
   end
 
-  defp start_client(conn, config) do
-    {:ok, rpc_client} = TestClient.start_link(conn, config, nil)
+  defp start_client(conn, config, initial \\ nil) do
+    {:ok, rpc_client} = TestClient.start_link(conn, config, initial)
 
     # Emulate RabbitMQ confirmation
     send(rpc_client, {:consume_ok, %{}})

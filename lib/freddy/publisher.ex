@@ -108,17 +108,36 @@ defmodule Freddy.Publisher do
               {:stop, reason :: term, state}
 
   @doc """
-  Called when the process receives a message.
+  Called when the process receives a call message sent by `call/3`. This
+  callback has the same arguments as the `GenServer` equivalent and the
+  `:reply`, `:noreply` and `:stop` return tuples behave the same.
+  """
+  @callback handle_call(request :: term, GenServer.from, state) ::
+              {:reply, reply :: term, state} |
+              {:reply, reply :: term, state, timeout | :hibernate} |
+              {:noreply, state} |
+              {:noreply, state, timeout | :hibernate} |
+              {:stop, reason :: term, state} |
+              {:stop, reason :: term, reply :: term, state}
 
-  Returning `{:noreply, state}` will causes the process to enter the main loop
-  with the given state.
+  @doc """
+  Called when the process receives a cast message sent by `cast/3`. This
+  callback has the same arguments as the `GenServer` equivalent and the
+  `:noreply` and `:stop` return tuples behave the same.
+  """
+  @callback handle_cast(request :: term, state) ::
+              {:noreply, state} |
+              {:noreply, state, timeout | :hibernate} |
+              {:stop, reason :: term, state}
 
-  Returning `{:stop, reason, state}` will not send the message, terminate the
-  main loop and call `terminate(reason, state)` before the process exits with
-  reason `reason`.
+  @doc """
+  Called when the process receives a message. This callback has the same
+  arguments as the `GenServer` equivalent and the `:noreply` and `:stop`
+  return tuples behave the same.
   """
   @callback handle_info(message :: term, state) ::
               {:noreply, state} |
+              {:noreply, state, timeout | :hibernate} |
               {:stop, reason :: term, state}
 
   @doc """
@@ -142,6 +161,14 @@ defmodule Freddy.Publisher do
         do: {:ok, state}
 
       @doc false
+      def handle_call(message, _from, state),
+        do: {:stop, {:bad_call, message}, state}
+
+      @doc false
+      def handle_cast(message, state),
+        do: {:stop, {:bad_cast, message}, state}
+
+      @doc false
       def handle_info(_message, state),
         do: {:noreply, state}
 
@@ -150,7 +177,8 @@ defmodule Freddy.Publisher do
         do: :ok
 
       defoverridable [init: 1, terminate: 2,
-                      before_publication: 4, handle_info: 2]
+                      before_publication: 4,
+                      handle_call: 3, handle_cast: 2, handle_info: 2]
     end
   end
 
@@ -213,11 +241,36 @@ defmodule Freddy.Publisher do
   end
 
   @doc false
-  def handle_info(message, {mod, state}) do
-    case mod.handle_info(message, state) do
-      {:noreply, new_state} -> {:noreply, {mod, new_state}}
-      {:stop, reason, new_state} -> {:stop, reason, {mod, new_state}}
+  def handle_call(message, from, {mod, state}) do
+    case mod.handle_call(message, from, state) do
+      {:reply, new_state} ->
+        {:reply, {mod, new_state}}
+
+      {:reply, new_state, timeout} ->
+        {:reply, {mod, new_state}, timeout}
+
+      {:noreply, new_state} ->
+        {:noreply, {mod, new_state}}
+
+      {:noreply, new_state, timeout} ->
+        {:noreply, {mod, new_state}, timeout}
+
+      {:stop, reason, new_state} ->
+        {:stop, reason, {mod, new_state}}
+
+      {:stop, reason, reply, new_state} ->
+        {:stop, reason, reply, {mod, new_state}}
     end
+  end
+
+  @doc false
+  def handle_cast(message, state) do
+    handle_async(message, :handle_cast, state)
+  end
+
+  @doc false
+  def handle_info(message, state) do
+    handle_async(message, :handle_info, state)
   end
 
   @doc false
@@ -226,6 +279,19 @@ defmodule Freddy.Publisher do
   end
 
   # Private functions
+
+  defp handle_async(message, fun, {mod, state}) do
+    case apply(mod, fun, [message, state]) do
+      {:noreply, new_state} ->
+        {:noreply, {mod, new_state}}
+
+      {:noreply, new_state, timeout} ->
+        {:noreply, {mod, new_state}, timeout}
+
+      {:stop, reason, new_state} ->
+        {:stop, reason, {mod, new_state}}
+    end
+  end
 
   defp complete_opts(opts) do
     Keyword.put(opts, :content_type, "application/json")
