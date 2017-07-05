@@ -3,7 +3,7 @@ defmodule Freddy.Mixfile do
 
   def project do
     [app: :freddy,
-     version: "0.9.1",
+     version: "0.9.2",
      elixir: "~> 1.4",
      elixirc_paths: elixirc_paths(Mix.env),
      build_embedded: Mix.env == :prod,
