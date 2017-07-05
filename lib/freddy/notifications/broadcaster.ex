@@ -55,7 +55,4 @@ defmodule Freddy.Notifications.Broadcaster do
   defdelegate call(consumer, message, timeout \\ 5000), to: Freddy.Publisher
   defdelegate cast(consumer, message), to: Freddy.Publisher
   defdelegate stop(consumer, reason \\ :normal), to: Freddy.Publisher
-  defdelegate ack(meta, opts \\ []), to: Freddy.Publisher
-  defdelegate nack(meta, opts \\ []), to: Freddy.Publisher
-  defdelegate reject(meta, opts \\ []), to: Freddy.Publisher
 end
