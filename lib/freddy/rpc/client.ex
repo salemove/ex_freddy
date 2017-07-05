@@ -161,17 +161,36 @@ defmodule Freddy.RPC.Client do
               {:stop, reason :: term, state}
 
   @doc """
-  Called when the process receives a message.
+  Called when the process receives a call message sent by `call/3`. This
+  callback has the same arguments as the `GenServer` equivalent and the
+  `:reply`, `:noreply` and `:stop` return tuples behave the same.
+  """
+  @callback handle_call(request :: term, GenServer.from, state) ::
+              {:reply, reply :: term, state} |
+              {:reply, reply :: term, state, timeout | :hibernate} |
+              {:noreply, state} |
+              {:noreply, state, timeout | :hibernate} |
+              {:stop, reason :: term, state} |
+              {:stop, reason :: term, reply :: term, state}
 
-  Returning `{:noreply, state}` will causes the process to enter the main loop
-  with the given state.
+  @doc """
+  Called when the process receives a cast message sent by `cast/3`. This
+  callback has the same arguments as the `GenServer` equivalent and the
+  `:noreply` and `:stop` return tuples behave the same.
+  """
+  @callback handle_cast(request :: term, state) ::
+              {:noreply, state} |
+              {:noreply, state, timeout | :hibernate} |
+              {:stop, reason :: term, state}
 
-  Returning `{:stop, reason, state}` will not send the message, terminate the
-  main loop and call `terminate(reason, state)` before the process exits with
-  reason `reason`.
+  @doc """
+  Called when the process receives a message. This callback has the same
+  arguments as the `GenServer` equivalent and the `:noreply` and `:stop`
+  return tuples behave the same.
   """
   @callback handle_info(message :: term, state) ::
               {:noreply, state} |
+              {:noreply, state, timeout | :hibernate} |
               {:stop, reason :: term, state}
 
   @doc """
@@ -194,24 +213,38 @@ defmodule Freddy.RPC.Client do
       def handle_ready(_meta, state),
         do: {:noreply, state}
 
+      @doc false
       def before_request(_payload, _opts, state),
         do: {:ok, state}
 
+      @doc false
       def on_response(response, _meta, state),
         do: {:reply, response, state}
 
+      @doc false
       def on_timeout(_meta, state),
         do: {:reply, {:error, :timeout}, state}
 
+      @doc false
+      def handle_call(message, _from, state),
+        do: {:stop, {:bad_call, message}, state}
+
+      @doc false
+      def handle_cast(message, state),
+        do: {:stop, {:bad_cast, message}, state}
+
+      @doc false
       def handle_info(_message, state),
         do: {:noreply, state}
 
+      @doc false
       def terminate(_reason, _state),
         do: :ok
 
       defoverridable [init: 1, terminate: 2,
                       handle_ready: 2, before_request: 3,
-                      on_response: 3, on_timeout: 2, handle_info: 2]
+                      on_response: 3, on_timeout: 2,
+                      handle_call: 3, handle_cast: 2, handle_info: 2]
     end
   end
 
@@ -361,8 +394,8 @@ defmodule Freddy.RPC.Client do
 
     log_timeout(meta, new_state)
 
-    given
-    |> mod.on_timeout(meta)
+    meta
+    |> mod.on_timeout(given)
     |> handle_mod_callback(new_state)
   end
 
@@ -374,11 +407,36 @@ defmodule Freddy.RPC.Client do
   end
 
   @doc false
-  def handle_info(message, %{mod: mod, given: given} = state) do
-    case mod.handle_info(message, given) do
-      {:noreply, new_given} -> {:noreply, State.update(state, new_given)}
-      {:stop, reason, new_given} -> {:stop, reason, State.update(state, new_given)}
+  def handle_call(message, from, %{mod: mod, given: given} = state) do
+    case mod.handle_call(message, from, given) do
+      {:reply, reply, new_given} ->
+        {:reply, reply, State.update(state, new_given)}
+
+      {:reply, reply, new_given, timeout} ->
+        {:reply, reply, State.update(state, new_given), timeout}
+
+      {:noreply, new_given} ->
+        {:noreply, State.update(state, new_given)}
+
+      {:noreply, new_given, timeout} ->
+        {:noreply, State.update(state, new_given), timeout}
+
+      {:stop, reason, new_given} ->
+        {:stop, reason, State.update(state, new_given)}
+
+      {:stop, reason, reply, new_given} ->
+        {:stop, reason, reply, State.update(state, new_given)}
     end
+  end
+
+  @doc false
+  def handle_cast(message, state) do
+    handle_async(message, :handle_cast, state)
+  end
+
+  @doc false
+  def handle_info(message, state) do
+    handle_async(message, :handle_info, state)
   end
 
   @doc false
@@ -398,6 +456,19 @@ defmodule Freddy.RPC.Client do
 
       {:stop, reason, response, new_given} ->
         {:stop, reason, response, State.update(state, new_given)}
+
+      {:stop, reason, new_given} ->
+        {:stop, reason, State.update(state, new_given)}
+    end
+  end
+
+  defp handle_async(message, fun, %{mod: mod, given: given} = state) do
+    case apply(mod, fun, [message, given]) do
+      {:noreply, new_given} ->
+        {:noreply, State.update(state, new_given)}
+
+      {:noreply, new_given, timeout} ->
+        {:noreply, State.update(state, new_given), timeout}
 
       {:stop, reason, new_given} ->
         {:stop, reason, State.update(state, new_given)}

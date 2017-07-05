@@ -156,17 +156,13 @@ defmodule Freddy.Consumer do
               {:stop, reason :: term, state}
 
   @doc """
-  Called when the process receives a message.
-
-  Returning `{:noreply, state}` will causes the process to enter the main loop
-  with the given state.
-
-  Returning `{:stop, reason, state}` will not send the message, terminate the
-  main loop and call `terminate(reason, state)` before the process exits with
-  reason `reason`.
+  Called when the process receives a message. This callback has the same
+  arguments as the `GenServer` equivalent and the `:noreply` and `:stop`
+  return tuples behave the same.
   """
   @callback handle_info(term, state) ::
               {:noreply, state} |
+              {:noreply, state, timeout | :hibernate} |
               {:stop, reason :: term, state}
 
 
@@ -205,8 +201,8 @@ defmodule Freddy.Consumer do
         do: {:stop, {:bad_call, message}, state}
 
       @doc false
-      def handle_cast(_message, state),
-        do: {:noreply, state}
+      def handle_cast(message, state),
+        do: {:stop, {:bad_cast, message}, state}
 
       @doc false
       def handle_info(_message, state),
@@ -296,19 +292,13 @@ defmodule Freddy.Consumer do
   end
 
   @doc false
-  def handle_cast(message, {mod, queue, state}) do
-    case mod.handle_cast(message, state) do
-      {:noreply, new_state} -> {:noreply, {mod, queue, new_state}}
-      {:noreply, new_state, timeout} -> {:noreply, {mod, queue, new_state}, timeout}
-      {:stop, reason, new_state} -> {:stop, reason, {mod, queue, new_state}}
-    end
+  def handle_cast(message, state) do
+    handle_mod_async(message, :handle_cast, state)
   end
 
   @doc false
-  def handle_info(meta, {mod, queue, state}) do
-    meta
-    |> mod.handle_info(state)
-    |> handle_mod_response(mod, queue)
+  def handle_info(message, state) do
+    handle_mod_async(message, :handle_info, state)
   end
 
   @doc false
@@ -340,8 +330,24 @@ defmodule Freddy.Consumer do
       {:noreply, state} ->
         {:noreply, {mod, queue, state}}
 
+      {:noreply, state, timeout} ->
+        {:noreply, {mod, queue, state}, timeout}
+
       {:stop, reason, state} ->
         {:stop, reason, {mod, queue, state}}
+    end
+  end
+
+  defp handle_mod_async(message, fun, {mod, queue, state}) do
+    case apply(mod, fun, [message, state]) do
+      {:noreply, new_state} ->
+        {:noreply, {mod, queue, new_state}}
+
+      {:noreply, new_state, timeout} ->
+        {:noreply, {mod, queue, new_state}, timeout}
+
+      {:stop, reason, new_state} ->
+        {:stop, reason, {mod, queue, new_state}}
     end
   end
 

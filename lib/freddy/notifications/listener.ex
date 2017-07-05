@@ -58,5 +58,10 @@ defmodule Freddy.Notifications.Listener do
     Freddy.Consumer.start_link(mod, conn, config, initial, opts)
   end
 
+  defdelegate call(consumer, message, timeout \\ 5000), to: Freddy.Consumer
+  defdelegate cast(consumer, message), to: Freddy.Consumer
   defdelegate stop(consumer, reason \\ :normal), to: Freddy.Consumer
+  defdelegate ack(meta, opts \\ []), to: Freddy.Consumer
+  defdelegate nack(meta, opts \\ []), to: Freddy.Consumer
+  defdelegate reject(meta, opts \\ []), to: Freddy.Consumer
 end
