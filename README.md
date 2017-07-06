@@ -11,7 +11,7 @@ The package can be installed as:
   1. Add `freddy` to your list of dependencies in `mix.exs`:
   ```elixir
   def deps do
-    [{:freddy, "~> 0.9.2"}]
+    [{:freddy, "~> 0.10.0"}]
   end
   ```
 
