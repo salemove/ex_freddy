@@ -7,7 +7,7 @@ defmodule Freddy.RPC.Client do
       defmodule PaymentsService do
         use Freddy.RPC.Client
 
-        @config [routing_key: "Payments", timeout: 3500]
+        @config [timeout: 3500]
 
         def start_link(conn, initial, opts \\ []) do
           Freddy.RPC.Client.start_link(__MODULE__, conn, @config, initial, opts)
@@ -15,10 +15,11 @@ defmodule Freddy.RPC.Client do
       end
 
       {:ok, client} = PaymentsService.start_link()
-      PaymentsService.request(client, %{type: "get_history", site_id: "xxx"})
+      PaymentsService.request(client, "Payments", %{type: "get_history", site_id: "xxx"})
   """
 
   @type payload     :: term
+  @type request     :: Freddy.RPC.Request.t
   @type response    :: term
   @type routing_key :: Hare.Adapter.routing_key
   @type opts        :: Hare.Adapter.opts
@@ -68,25 +69,22 @@ defmodule Freddy.RPC.Client do
   @doc """
   Called before a request will be performed to the exchange.
 
-  It receives as argument the message payload, the routing key, the options
-  for that publication and the internal state.
+  It receives as argument the RPC request structure which contains the message
+  payload, the routing key and the options for that publication, and the
+  internal client state.
 
   Returning `{:ok, state}` will cause the request to be performed with no
   modification, block the client until the response is received, and enter
   the main loop with the given state.
 
-  Returnung `{:ok, meta, state}` will do the same as `{:ok, state}`, but
+  Returning `{:ok, request, state}` will do the same as `{:ok, state}`, but
   returned `meta` will be given as a 2nd argument in `on_response/3` and
   as a 1st argument in `on_timeout/3` callback.
 
-  Returning `{:ok, payload, opts, state}` will cause the
-  given payload, routing key and options to be used instead of the original
-  ones, block the client until the response is received, and enter
-  the main loop with the given state.
-
-  Returning `{:ok, payload, opts, meta, state` will do the same as
-  `{:ok, payload, opts, state}`, but returned `meta` will be given as a
-  2nd argument in `on_response/3` and as a 1st argument in `on_timeout/3` callback.
+  Returning `{:ok, request, state}` will cause the payload, routing key and
+  options from the given `request` to be used instead or the original ones,
+  block the client until the response is received, and enter the main loop
+  with the given state.
 
   Returning `{:reply, response, state}` will respond the client inmediately
   without performing the request with the given response, and enter the main
@@ -101,11 +99,9 @@ defmodule Freddy.RPC.Client do
   main loop and call `terminate(reason, state)` before the process exits with
   reason `reason`.
   """
-  @callback before_request(payload, opts :: term, state) ::
+  @callback before_request(request, state) ::
               {:ok, state} |
-              {:ok, meta, state} |
-              {:ok, payload, opts :: term, state} |
-              {:ok, payload, opts :: term, meta, state} |
+              {:ok, request, state} |
               {:reply, response, state} |
               {:stop, reason :: term, response, state} |
               {:stop, reason :: term, state}
@@ -131,9 +127,11 @@ defmodule Freddy.RPC.Client do
   Returning `{:stop, reason, state}` not reply to the caller and call
   `terminate(reason, state)` before the process exits with reason `reason`.
   """
-  @callback on_response(response, meta, state) ::
+  @callback on_response(response, request, state) ::
               {:reply, response, state} |
+              {:reply, response, state, timeout | :hibernate} |
               {:noreply, state} |
+              {:noreply, state, timeout | :hibernate} |
               {:stop, reason :: term, response, state} |
               {:stop, reason :: term, state}
 
@@ -154,9 +152,36 @@ defmodule Freddy.RPC.Client do
   Returning `{:stop, reason, state}` will not reply to the caller and call
   `terminate(reason, state)` before the process exits with reason `reason`.
   """
-  @callback on_timeout(meta :: term, state) ::
+  @callback on_timeout(request, state) ::
               {:reply, response, state} |
+              {:reply, response, state, timeout | :hibernate} |
               {:noreply, state} |
+              {:noreply, state, timeout | :hibernate} |
+              {:stop, reason :: term, response, state} |
+              {:stop, reason :: term, state}
+
+  @doc """
+  Called when a request has been returned by AMPQ broker.
+
+  Returning `{:reply, reply, state}` will cause the given reply to be
+  delivered to the caller, and enter the main loop with the given state.
+
+  Returning `{:noreply, state}` will enter the main loop with the given state
+  without responding to the caller (that will eventually timeout or keep blocked
+  forever if the timeout was set to `:infinity`).
+
+  Returning `{:stop, reason, reply, state}` will deliver the given reply to
+  the caller, and call `terminate(reason, state)` before the process exits
+  with reason `reason`.
+
+  Returning `{:stop, reason, state}` will not reply to the caller and call
+  `terminate(reason, state)` before the process exits with reason `reason`.
+  """
+  @callback on_return(request, state) ::
+              {:reply, response, state} |
+              {:reply, response, state, timeout | :hibernate} |
+              {:noreply, state} |
+              {:noreply, state, timeout | :hibernate} |
               {:stop, reason :: term, response, state} |
               {:stop, reason :: term, state}
 
@@ -214,16 +239,19 @@ defmodule Freddy.RPC.Client do
         do: {:noreply, state}
 
       @doc false
-      def before_request(_payload, _opts, state),
+      def before_request(_request, state),
         do: {:ok, state}
 
       @doc false
-      def on_response(response, _meta, state),
+      def on_response(response, _request, state),
         do: {:reply, response, state}
 
       @doc false
-      def on_timeout(_meta, state),
+      def on_timeout(_request, state),
         do: {:reply, {:error, :timeout}, state}
+
+      def on_return(_request, state),
+        do: {:reply, {:error, :no_route}, state}
 
       @doc false
       def handle_call(message, _from, state),
@@ -242,8 +270,8 @@ defmodule Freddy.RPC.Client do
         do: :ok
 
       defoverridable [init: 1, terminate: 2,
-                      handle_ready: 2, before_request: 3,
-                      on_response: 3, on_timeout: 2,
+                      handle_ready: 2, before_request: 2,
+                      on_response: 3, on_timeout: 2, on_return: 2,
                       handle_call: 3, handle_cast: 2, handle_info: 2]
     end
   end
@@ -251,14 +279,15 @@ defmodule Freddy.RPC.Client do
   use Hare.RPC.Client
 
   require Logger
+
   alias Freddy.RPC.Client.State
+  alias Freddy.RPC.Request
 
   @default_timeout 3000
   @gen_server_timeout 10000
 
   @type config :: [timeout: timeout,
-                   exchange: Hare.Context.Action.DeclareExchange.config,
-                   routing_key: routing_key]
+                   exchange: Hare.Context.Action.DeclareExchange.config]
 
   @doc """
   Starts a `Freddy.RPC.Client` process linked to the current process.
@@ -280,14 +309,13 @@ defmodule Freddy.RPC.Client do
           no_return()
   def start_link(mod, conn, config, initial, opts \\ []) do
     exchange = Keyword.get(config, :exchange, [])
-    routing_key = Keyword.fetch!(config, :routing_key)
     timeout = Keyword.get(config, :timeout, @default_timeout)
 
     Hare.RPC.Client.start_link(
       __MODULE__,
       conn,
       [exchange: exchange, timeout: timeout],
-      {mod, timeout, routing_key, initial},
+      {mod, timeout, initial},
       opts
     )
   end
@@ -300,20 +328,20 @@ defmodule Freddy.RPC.Client do
   @doc """
   Performs a RPC request and blocks until the response arrives.
   """
-  @spec request(GenServer.server, payload, GenServer.options) ::
+  @spec request(GenServer.server, routing_key, payload, GenServer.options) ::
           {:ok, response} |
           {:error, reason :: term} |
           {:error, reason :: term, hint :: term}
-  def request(client, payload, opts \\ []) do
-    Hare.Actor.call(client, {:"$hare_request", payload, "", opts}, @gen_server_timeout)
+  def request(client, routing_key, payload, opts \\ []) do
+    Hare.Actor.call(client, {:"$hare_request", payload, routing_key, opts}, @gen_server_timeout)
   end
 
   # Hare.RPC.Client callbacks
 
   @doc false
-  def init({mod, timeout, routing_key, initial}) do
+  def init({mod, timeout, initial}) do
     case mod.init(initial) do
-      {:ok, given} -> {:ok, State.new(mod, timeout, routing_key, given)}
+      {:ok, given} -> {:ok, State.new(mod, timeout, given)}
       {:stop, reason} -> {:stop, reason}
       :ignore -> :ignore
     end
@@ -328,42 +356,15 @@ defmodule Freddy.RPC.Client do
   end
 
   @doc false
-  def before_request(payload, _, opts, from, %{mod: mod, given: given} = state) do
-    freddy_opts = [
-      mandatory: true,
-      content_type: "application/json",
-      expiration: to_string(state.timeout),
-      type: "request"
-    ]
+  def before_request(payload, routing_key, opts, from, %{mod: mod, given: given} = state) do
+    request = Request.start(from, payload, routing_key, opts)
 
-    case mod.before_request(payload, opts, given) do
+    case mod.before_request(request, given) do
       {:ok, new_given} ->
-        {:ok,
-          Poison.encode!(payload),
-          state.routing_key,
-          opts ++ freddy_opts,
-          state |> State.update(new_given) |> State.push_waiting(from, %{})}
+        send_request(request, new_given, state)
 
-      {:ok, meta, new_given} ->
-        {:ok,
-          Poison.encode!(payload),
-          state.routing_key,
-          opts ++ freddy_opts,
-          state |> State.update(new_given) |> State.push_waiting(from, meta)}
-
-      {:ok, new_payload, new_opts, new_given} ->
-        {:ok,
-          Poison.encode!(new_payload),
-          state.routing_key,
-          new_opts ++ freddy_opts,
-          state |> State.update(new_given) |> State.push_waiting(from, %{})}
-
-      {:ok, new_payload, new_opts, meta, new_given} ->
-        {:ok,
-          Poison.encode!(new_payload),
-          state.routing_key,
-          new_opts ++ freddy_opts,
-          state |> State.update(new_given) |> State.push_waiting(from, meta)}
+      {:ok, new_request, new_given} ->
+        send_request(new_request, new_given, state)
 
       {:reply, response, new_given} ->
         {:reply, response, State.update(state, new_given)}
@@ -376,34 +377,76 @@ defmodule Freddy.RPC.Client do
     end
   end
 
+  defp send_request(%{payload: payload, routing_key: routing_key, options: options} = request, new_given, state) do
+    case Poison.encode(payload) do
+      {:ok, encoded_payload} ->
+        freddy_options = [mandatory: true,
+                          content_type: "application/json",
+                          expiration: to_string(state.timeout),
+                          type: "request"]
+
+        options = Keyword.merge(options, freddy_options)
+        new_state = state |> State.update(new_given) |> State.push_waiting(request)
+
+        Logger.debug fn -> "Sending request to #{routing_key}: #{encoded_payload}" end
+
+        {:ok, encoded_payload, routing_key, options, new_state}
+
+      {:error, reason} ->
+        {:stop, {:encode_error, reason}, State.update(state, new_given)}
+    end
+  end
+
   @doc false
   def on_response(response, from, %{mod: mod, given: given} = state) do
-    {meta, new_state} = State.pop_waiting(state, from)
+    case State.pop_waiting(state, from) do
+      {:ok, request, new_state} ->
+        finished_request = Request.finish(request)
 
-    response
-    |> log_response(meta, state)
-    |> Poison.decode()
-    |> handle_response()
-    |> mod.on_response(meta, given)
-    |> handle_mod_callback(new_state)
+        response
+        |> log_response(finished_request)
+        |> Poison.decode()
+        |> handle_response()
+        |> mod.on_response(finished_request, given)
+        |> handle_mod_callback(new_state)
+
+      {:error, :not_found} ->
+        {:noreply, state}
+    end
   end
 
   @doc false
   def on_timeout(from, %{mod: mod, given: given} = state) do
-    {meta, new_state} = State.pop_waiting(state, from)
+    case State.pop_waiting(state, from) do
+      {:ok, request, new_state} ->
+        finished_request = Request.finish(request)
 
-    log_timeout(meta, new_state)
+        log_timeout(finished_request)
 
-    meta
-    |> mod.on_timeout(given)
-    |> handle_mod_callback(new_state)
+        finished_request
+        |> mod.on_timeout(given)
+        |> handle_mod_callback(new_state)
+
+      {:error, :not_found} ->
+        {:noreply, state}
+    end
   end
 
   @doc false
-  def on_return(from, state) do
-    {meta, new_state} = State.pop_waiting(state, from)
-    log_return(meta, new_state)
-    {:reply, {:error, :no_route}, new_state}
+  def on_return(from, %{mod: mod, given: given} = state) do
+    case State.pop_waiting(state, from) do
+      {:ok, request, new_state} ->
+        finished_request = Request.finish(request)
+
+        log_return(finished_request)
+
+        finished_request
+        |> mod.on_return(given)
+        |> handle_mod_callback(new_state)
+
+      {:error, :not_found} ->
+        {:noreply, state}
+    end
   end
 
   @doc false
@@ -451,8 +494,14 @@ defmodule Freddy.RPC.Client do
       {:reply, response, new_given} ->
         {:reply, response, State.update(state, new_given)}
 
+      {:reply, response, new_given, timeout} ->
+        {:reply, response, State.update(state, new_given), timeout}
+
       {:noreply, new_given} ->
         {:noreply, State.update(state, new_given)}
+
+      {:noreply, new_given, timeout} ->
+        {:noreply, State.update(state, new_given), timeout}
 
       {:stop, reason, response, new_given} ->
         {:stop, reason, response, State.update(state, new_given)}
@@ -488,19 +537,17 @@ defmodule Freddy.RPC.Client do
   defp handle_response({:error, json_error}),
     do: {:error, :protocol_error, json_error}
 
-  defp log_response(response, meta, %{routing_key: queue}) do
-    Logger.debug fn ->  ["Response received from ", queue, " after #{calculate_elapsed(meta)} ms:", response] end
+  defp log_response(response, %{routing_key: routing_key} = request) do
+    Logger.debug fn ->
+      ["Response received from ", routing_key, " after #{Request.duration(request)} ms:", response]
+    end
+
     response
   end
 
-  defp log_timeout(meta, %{routing_key: queue}),
-    do: Logger.error fn -> ["RPC call to ", queue, " timed out after #{calculate_elapsed(meta)} ms"] end
+  defp log_timeout(%{routing_key: routing_key} = request),
+    do: Logger.error fn -> ["RPC call to ", routing_key, " timed out after #{Request.duration(request)} ms"] end
 
-  defp log_return(_meta, %{routing_key: queue}),
-    do: Logger.error fn -> ["RPC call to ", queue, " couldn't be routed"] end
-
-  defp calculate_elapsed(%{start_time: start_time, stop_time: stop_time}),
-    do: System.convert_time_unit(stop_time - start_time, :native, :milliseconds)
-  defp calculate_elapsed(_),
-    do: :unknown
+  defp log_return(%{routing_key: routing_key} = _request),
+    do: Logger.error fn -> ["RPC call to ", routing_key, " couldn't be routed"] end
 end

@@ -11,7 +11,7 @@ The package can be installed as:
   1. Add `freddy` to your list of dependencies in `mix.exs`:
   ```elixir
   def deps do
-    [{:freddy, github: "salemove/ex_freddy"}]
+    [{:freddy, "~> 0.10.0"}]
   end
   ```
 
@@ -33,14 +33,14 @@ The package can be installed as:
   defmodule AMQPService do
     use Freddy.RPC.Client
     
-    @config [routing_key: "amqp-service"]
+    @routing_key "amqp-service"
     
     def start_link(conn, initial \\ nil, opts \\ []) do
-      Freddy.RPC.Client.start_link(__MODULE__, conn, @config, initial, opts)
+      Freddy.RPC.Client.start_link(__MODULE__, conn, [], initial, opts)
     end
     
-    def ping(client) do
-      Freddy.RPC.Client.request(client, %{type: "ping"})
+    def ping(client \\ __MODULE__) do
+      Freddy.RPC.Client.request(client, @routing_key, %{type: "ping"})
     end
   end
   ```
@@ -67,7 +67,7 @@ The package can be installed as:
     
   4. You can now use your client:
   ```elixir
-  case AMQPService.ping(AMQPService) do
+  case AMQPService.ping() do
     {:ok, resp} -> 
       IO.puts "Response: #{inspect response}"
       
