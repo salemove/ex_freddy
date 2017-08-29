@@ -38,12 +38,12 @@ defmodule Freddy.Mixfile do
   # Type "mix help deps" for more examples and options
   defp deps do
     [
-      {:hare, "~> 0.2.0", hex: :salemove_hare},
-      {:amqp, "~> 0.2.2"},
-      {:poison, ">= 2.0.0"},
+      {:hare, "~> 0.2", hex: :salemove_hare},
+      {:amqp, "~> 0.2"},
+      {:poison, "~> 1.0 or ~> 2.0 or ~> 3.0"},
 
-      {:mock, "~> 0.2.0", only: :test},
-      {:ex_doc, ">= 0.0.0", only: :dev},
+      {:mock, "~> 0.2", only: :test},
+      {:ex_doc, "~> 0.16", only: :dev},
       {:dialyxir, "~> 0.5", only: :dev, runtime: false}
     ]
   end
