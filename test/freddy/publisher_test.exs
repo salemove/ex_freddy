@@ -14,6 +14,16 @@ defmodule Freddy.PublisherTest do
       {:ok, pid}
     end
 
+    def handle_connected(pid) do
+      send(pid, :connected)
+      {:noreply, pid}
+    end
+
+    def handle_disconnected(reason, pid) do
+      send(pid, {:disconnected, reason})
+      {:noreply, pid}
+    end
+
     def before_publication(%{action: "keep"} = payload, routing_key, opts, pid) do
       send(pid, {:before_publication, payload, routing_key, opts})
 
@@ -42,6 +52,33 @@ defmodule Freddy.PublisherTest do
       publisher = start_publisher(conn)
 
       assert_receive :init
+
+      tear_down(publisher)
+    end
+  end
+
+  describe "handle_connected/1 callback" do
+    test "is called when RabbitMQ channel is opened", %{conn: conn} do
+      publisher = start_publisher(conn)
+
+      assert_receive :connected
+
+      tear_down(publisher)
+    end
+  end
+
+  describe "handle_disconnected/2 callback" do
+    test "is called when RabbitMQ connection is disrupted", %{conn: conn, history: history} do
+      publisher = start_publisher(conn)
+
+      assert_receive :connected
+
+      [_open_conn, _monitor_conn, {:open_channel, _, {:ok, chan}} | _rest] =
+        Adapter.Backdoor.events(history)
+
+      Adapter.Backdoor.crash(chan, :simulated_crash)
+
+      assert_receive {:disconnected, :simulated_crash}
 
       tear_down(publisher)
     end

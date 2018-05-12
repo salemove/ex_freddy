@@ -82,6 +82,33 @@ defmodule Freddy.Publisher do
               | {:stop, reason :: term}
 
   @doc """
+  Called when the publisher process has successfully opened AMQP channel.
+
+  Returning `{:noreply, state}` will cause the process to enter the main loop
+  with the given state.
+
+  Returning `{:stop, reason, state}` will terminate the main loop and call
+  `terminate(reason, state)` before the process exits with reason `reason`.
+  """
+  @callback handle_connected(state) ::
+              {:noreply, state}
+              | {:stop, reason :: term, state}
+
+  @doc """
+  Called when the AMQP publisher has been disconnected from the AMQP broker.
+
+  Returning `{:noreply, state}` causes the process to enter the main loop with
+  the given state. The publisher will not be able to send any new messages until
+  connection to AMQP broker is established again.
+
+  Returning `{:stop, reason, state}` will terminate the main loop and call
+  `terminate(reason, state)` before the process exits with reason `reason`.
+  """
+  @callback handle_disconnected(reason :: term, state) ::
+              {:noreply, state}
+              | {:stop, reason :: term, state}
+
+  @doc """
   Called before a message will be published to the exchange.
 
   It receives as argument the message payload, the routing key, the options
@@ -156,6 +183,14 @@ defmodule Freddy.Publisher do
         do: {:ok, initial}
 
       @doc false
+      def handle_connected(state),
+        do: {:noreply, state}
+
+      @doc false
+      def handle_disconnected(_reason, state),
+        do: {:noreply, state}
+
+      @doc false
       def before_publication(_payload, _routing_key, _meta, state),
         do: {:ok, state}
 
@@ -176,6 +211,8 @@ defmodule Freddy.Publisher do
         do: :ok
 
       defoverridable init: 1,
+                     handle_connected: 1,
+                     handle_disconnected: 2,
                      terminate: 2,
                      before_publication: 4,
                      handle_call: 3,
@@ -223,6 +260,28 @@ defmodule Freddy.Publisher do
       {:ok, state} -> {:ok, {mod, state}}
       :ignore -> :ignore
       {:stop, reason} -> {:stop, reason}
+    end
+  end
+
+  @doc false
+  def handle_connected({mod, state}) do
+    case mod.handle_connected(state) do
+      {:noreply, new_state} ->
+        {:noreply, {mod, new_state}}
+
+      {:stop, reason, new_state} ->
+        {:stop, reason, {mod, new_state}}
+    end
+  end
+
+  @doc false
+  def handle_disconnected(reason, {mod, state}) do
+    case mod.handle_disconnected(reason, state) do
+      {:noreply, new_state} ->
+        {:noreply, {mod, new_state}}
+
+      {:stop, reason, new_state} ->
+        {:stop, reason, {mod, new_state}}
     end
   end
 
