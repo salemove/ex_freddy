@@ -37,10 +37,10 @@ defmodule Freddy.Consumer do
   """
 
   @type payload :: term
-  @type meta    :: map
-  @type action  :: :ack | :nack | :reject
-  @type state   :: term
-  @type error   :: term
+  @type meta :: map
+  @type action :: :ack | :nack | :reject
+  @type state :: term
+  @type error :: term
 
   @doc """
   Called when the consumer process is first started.
@@ -60,9 +60,9 @@ defmodule Freddy.Consumer do
   or calling `terminate/2`.
   """
   @callback init(state) ::
-              {:ok, state} |
-              :ignore |
-              {:stop, reason :: term}
+              {:ok, state}
+              | :ignore
+              | {:stop, reason :: term}
 
   @doc """
   Called when the AMQP server has registered the process as a consumer and it
@@ -75,8 +75,8 @@ defmodule Freddy.Consumer do
   `terminate(reason, state)` before the process exits with reason `reason`.
   """
   @callback handle_ready(meta, state) ::
-              {:noreply, state} |
-              {:stop, reason :: term, state}
+              {:noreply, state}
+              | {:stop, reason :: term, state}
 
   @doc """
   Called when a message is delivered from the queue.
@@ -100,10 +100,10 @@ defmodule Freddy.Consumer do
   `terminate(reason, state)` before the process exits with reason `reason`.
   """
   @callback handle_message(payload, meta, state) ::
-              {:reply, action, state} |
-              {:reply, action, opts :: Keyword.t, state} |
-              {:noreply, state} |
-              {:stop, reason :: term, state}
+              {:reply, action, state}
+              | {:reply, action, opts :: Keyword.t(), state}
+              | {:noreply, state}
+              | {:stop, reason :: term, state}
 
   @doc """
   Called when a message cannot be decoded or when an error occurred during message processing.
@@ -127,23 +127,23 @@ defmodule Freddy.Consumer do
   `terminate(reason, state)` before the process exits with reason `reason`.
   """
   @callback handle_error(error, payload, meta, state) ::
-              {:reply, action, state} |
-              {:reply, action, opts :: Keyword.t, state} |
-              {:noreply, state} |
-              {:stop, reason :: term, state}
+              {:reply, action, state}
+              | {:reply, action, opts :: Keyword.t(), state}
+              | {:noreply, state}
+              | {:stop, reason :: term, state}
 
   @doc """
   Called when the process receives a call message sent by `call/3`. This
   callback has the same arguments as the `GenServer` equivalent and the
   `:reply`, `:noreply` and `:stop` return tuples behave the same.
   """
-  @callback handle_call(request :: term, GenServer.from, state) ::
-              {:reply, reply :: term, state} |
-              {:reply, reply :: term, state, timeout | :hibernate} |
-              {:noreply, state} |
-              {:noreply, state, timeout | :hibernate} |
-              {:stop, reason :: term, state} |
-              {:stop, reason :: term, reply :: term, state}
+  @callback handle_call(request :: term, GenServer.from(), state) ::
+              {:reply, reply :: term, state}
+              | {:reply, reply :: term, state, timeout | :hibernate}
+              | {:noreply, state}
+              | {:noreply, state, timeout | :hibernate}
+              | {:stop, reason :: term, state}
+              | {:stop, reason :: term, reply :: term, state}
 
   @doc """
   Called when the process receives a cast message sent by `cast/3`. This
@@ -151,9 +151,9 @@ defmodule Freddy.Consumer do
   `:noreply` and `:stop` return tuples behave the same.
   """
   @callback handle_cast(request :: term, state) ::
-              {:noreply, state} |
-              {:noreply, state, timeout | :hibernate} |
-              {:stop, reason :: term, state}
+              {:noreply, state}
+              | {:noreply, state, timeout | :hibernate}
+              | {:stop, reason :: term, state}
 
   @doc """
   Called when the process receives a message. This callback has the same
@@ -161,18 +161,16 @@ defmodule Freddy.Consumer do
   return tuples behave the same.
   """
   @callback handle_info(term, state) ::
-              {:noreply, state} |
-              {:noreply, state, timeout | :hibernate} |
-              {:stop, reason :: term, state}
-
+              {:noreply, state}
+              | {:noreply, state, timeout | :hibernate}
+              | {:stop, reason :: term, state}
 
   @doc """
   This callback is the same as the `GenServer` equivalent and is called when the
   process terminates. The first argument is the reason the process is about
   to exit with.
   """
-  @callback terminate(reason :: term, state) ::
-              any
+  @callback terminate(reason :: term, state) :: any
 
   defmacro __using__(_) do
     quote location: :keep do
@@ -212,22 +210,28 @@ defmodule Freddy.Consumer do
       def terminate(_reason, _state),
         do: :ok
 
-      defoverridable [init: 1, handle_ready: 2,
-                      handle_message: 3, handle_error: 4,
-                      handle_cast: 2, handle_call: 3, handle_info: 2,
-                      terminate: 2]
+      defoverridable init: 1,
+                     handle_ready: 2,
+                     handle_message: 3,
+                     handle_error: 4,
+                     handle_cast: 2,
+                     handle_call: 3,
+                     handle_info: 2,
+                     terminate: 2
     end
   end
 
   use Hare.Consumer
 
-  @type config :: [queue:        Hare.Context.Action.DeclareQueue.config,
-                   exchange:     Hare.Context.Action.DeclareExchange.config,
-                   qos:          Hare.Context.Action.Qos.config,
-                   routing_keys: [String.t],
-                   binds:        [Keyword.t]]
+  @type config :: [
+          queue: Hare.Context.Action.DeclareQueue.config(),
+          exchange: Hare.Context.Action.DeclareExchange.config(),
+          qos: Hare.Context.Action.Qos.config(),
+          routing_keys: [String.t()],
+          binds: [Keyword.t()]
+        ]
 
-  @type connection :: GenServer.server
+  @type connection :: GenServer.server()
 
   @compile {:inline, start_link: 4, start_link: 5, stop: 1, stop: 2}
 
@@ -242,9 +246,17 @@ defmodule Freddy.Consumer do
     * `initial` - the value that will be given to `init/1`
     * `opts` - the GenServer options
   """
-  @spec start_link(module, connection, config, initial :: term, GenServer.options) :: GenServer.on_start
+  @spec start_link(module, connection, config, initial :: term, GenServer.options()) ::
+          GenServer.on_start()
   def start_link(mod, connection, config, initial, opts \\ []),
-    do: Hare.Consumer.start_link(__MODULE__, connection, build_consumer_config(config), {mod, initial}, opts)
+    do:
+      Hare.Consumer.start_link(
+        __MODULE__,
+        connection,
+        build_consumer_config(config),
+        {mod, initial},
+        opts
+      )
 
   defdelegate call(consumer, message, timeout \\ 5000), to: Hare.Consumer
   defdelegate cast(consumer, message), to: Hare.Consumer

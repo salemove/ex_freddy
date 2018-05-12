@@ -9,13 +9,14 @@ defmodule Freddy.RPC.Request do
   alias __MODULE__
 
   @type t :: %__MODULE__{
-              id: id,
-              routing_key: routing_key,
-              payload: payload,
-              start_time: time,
-              stop_time: time | nil,
-              options: options,
-              meta: map}
+          id: id,
+          routing_key: routing_key,
+          payload: payload,
+          start_time: time,
+          stop_time: time | nil,
+          options: options,
+          meta: map
+        }
 
   @typedoc "Request identifier. Used only internally, can be anything"
   @type id :: term
@@ -24,7 +25,7 @@ defmodule Freddy.RPC.Request do
   @type routing_key :: binary
 
   @typedoc "Request options"
-  @type options :: Keyword.t
+  @type options :: Keyword.t()
 
   @typedoc "Request payload"
   @type payload :: term
@@ -44,20 +45,23 @@ defmodule Freddy.RPC.Request do
 
   @spec start(id, payload, routing_key, options) :: t
   def start(id, payload, routing_key, options) do
-    %Request{id:          id,
-             routing_key: routing_key,
-             payload:     payload,
-             options:     options,
-             start_time:  now()}
+    %Request{
+      id: id,
+      routing_key: routing_key,
+      payload: payload,
+      options: options,
+      start_time: now()
+    }
   end
 
   @spec finish(t) :: t
   def finish(%Request{} = req),
     do: %{req | stop_time: now()}
 
-  @spec duration(t, granularity :: System.time_unit) :: integer
-  def duration(%Request{start_time: t1, stop_time: t2} = _req, granularity \\ :milliseconds) when is_integer(t2),
-    do: System.convert_time_unit(t2 - t1, :native, granularity)
+  @spec duration(t, granularity :: System.time_unit()) :: integer
+  def duration(%Request{start_time: t1, stop_time: t2} = _req, granularity \\ :milliseconds)
+      when is_integer(t2),
+      do: System.convert_time_unit(t2 - t1, :native, granularity)
 
   @spec update_routing_key(t, routing_key) :: t
   def update_routing_key(%Request{} = req, new_routing_key),

@@ -18,22 +18,23 @@ defmodule Freddy.Conn do
 
   @compile {:inline, start_link: 1, start_link: 2, stop: 1, stop: 2}
 
-  @type config        :: [config_option]
-  @type config_option :: {:adapter, atom} |
-                         {:backoff, [non_neg_integer]} |
-                         {:history, GenServer.server} |
-                         {:host, binary} |
-                         {:port, pos_integer} |
-                         {:username, binary} |
-                         {:password, binary} |
-                         {:virtual_host, binary} |
-                         {:channel_max, non_neg_integer} |
-                         {:frame_max, non_neg_integer} |
-                         {:heartbeat, non_neg_integer} |
-                         {:connection_timeout, timeout} |
-                         {:ssl_options, Keyword.t | :none} |
-                         {:client_properties, list} |
-                         {:socket_options, list}
+  @type config :: [config_option]
+  @type config_option ::
+          {:adapter, atom}
+          | {:backoff, [non_neg_integer]}
+          | {:history, GenServer.server()}
+          | {:host, binary}
+          | {:port, pos_integer}
+          | {:username, binary}
+          | {:password, binary}
+          | {:virtual_host, binary}
+          | {:channel_max, non_neg_integer}
+          | {:frame_max, non_neg_integer}
+          | {:heartbeat, non_neg_integer}
+          | {:connection_timeout, timeout}
+          | {:ssl_options, Keyword.t() | :none}
+          | {:client_properties, list}
+          | {:socket_options, list}
 
   @doc """
   Starts a `Hare.Core.Conn` process linked to the current process.
@@ -46,12 +47,10 @@ defmodule Freddy.Conn do
   This function is used to start a `Hare.Core.Conn` on a supervision tree, and
   behaves like a GenServer.
   """
-  @spec start_link(config, GenServer.options) :: GenServer.on_start
+  @spec start_link(config, GenServer.options()) :: GenServer.on_start()
   def start_link(config \\ [], opts \\ []) do
     Conn.start_link(
-      [config: connection_config(config),
-       adapter: adapter(config),
-       backoff: backoff(config)],
+      [config: connection_config(config), adapter: adapter(config), backoff: backoff(config)],
       opts
     )
   end

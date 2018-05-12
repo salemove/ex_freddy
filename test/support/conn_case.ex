@@ -17,10 +17,12 @@ defmodule Freddy.ConnCase do
 
   setup _tags do
     {:ok, history} = Adapter.Backdoor.start_history()
-    {:ok, conn} = Conn.start_link(
-      history: history,
-      adapter: :sandbox
-    )
+
+    {:ok, conn} =
+      Conn.start_link(
+        history: history,
+        adapter: :sandbox
+      )
 
     {:ok, conn: conn, history: history}
   end

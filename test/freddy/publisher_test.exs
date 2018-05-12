@@ -62,19 +62,20 @@ defmodule Freddy.PublisherTest do
       sync_publisher_and_history()
 
       assert {:publish,
-               [_chan,
-                 "test-exchange",
-                 ^encoded_payload,
-                 ^routing_key,
-                 [content_type: "application/json", mandatory: true]],
-               :ok} = Adapter.Backdoor.last_event(history)
+              [
+                _chan,
+                "test-exchange",
+                ^encoded_payload,
+                ^routing_key,
+                [content_type: "application/json", mandatory: true]
+              ], :ok} = Adapter.Backdoor.last_event(history)
 
       tear_down(publisher)
     end
 
     test "changes payload, routing_key and opts " <>
-         "when returns {:ok, payload, routing_key, opts}", %{conn: conn, history: history}
-    do
+           "when returns {:ok, payload, routing_key, opts}",
+         %{conn: conn, history: history} do
       publisher = start_publisher(conn)
 
       payload = %{action: "change"}
@@ -89,12 +90,13 @@ defmodule Freddy.PublisherTest do
       sync_publisher_and_history()
 
       assert {:publish,
-               [_chan,
-                 "test-exchange",
-                 ^expected_payload,
-                 "routing_key.changed",
-                 [content_type: "application/json", mandatory: true, changed: "added"]],
-               :ok} = Adapter.Backdoor.last_event(history)
+              [
+                _chan,
+                "test-exchange",
+                ^expected_payload,
+                "routing_key.changed",
+                [content_type: "application/json", mandatory: true, changed: "added"]
+              ], :ok} = Adapter.Backdoor.last_event(history)
 
       tear_down(publisher)
     end

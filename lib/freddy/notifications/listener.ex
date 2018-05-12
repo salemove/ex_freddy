@@ -33,11 +33,13 @@ defmodule Freddy.Notifications.Listener do
     type: :topic
   ]
 
-  @type connection :: Freddy.Consumer.connection
-  @type options    :: GenServer.options
-  @type config     :: [queue:        Hare.Context.Action.DeclareQueue.config,
-                       routing_keys: [String.t],
-                       binds:        [Keyword.t]]
+  @type connection :: Freddy.Consumer.connection()
+  @type options :: GenServer.options()
+  @type config :: [
+          queue: Hare.Context.Action.DeclareQueue.config(),
+          routing_keys: [String.t()],
+          binds: [Keyword.t()]
+        ]
 
   @compile {:inline, stop: 1, stop: 2}
 
@@ -52,7 +54,7 @@ defmodule Freddy.Notifications.Listener do
     * `initial` - the value that will be given to `init/1`
     * `opts` - the GenServer options
   """
-  @spec start_link(module, connection, config, initial :: term, options) :: GenServer.on_start
+  @spec start_link(module, connection, config, initial :: term, options) :: GenServer.on_start()
   def start_link(mod, conn, config, initial, opts \\ []) do
     config = Keyword.put(config, :exchange, @exchange)
     Freddy.Consumer.start_link(mod, conn, config, initial, opts)

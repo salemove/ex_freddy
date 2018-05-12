@@ -32,15 +32,13 @@ defmodule Freddy.Notifications.ListenerTest do
     assert %{chan: chan, name: "test-consumer-queue"} = queue
     assert %{chan: ^chan, name: "freddy-topic"} = exchange
 
-    assert [{:bind,
-              [chan, "test-consumer-queue", "freddy-topic", [routing_key: "routing-key1"]],
+    assert [
+             {:bind, [chan, "test-consumer-queue", "freddy-topic", [routing_key: "routing-key1"]],
               :ok},
-            {:bind,
-              [chan, "test-consumer-queue", "freddy-topic", [routing_key: "routing-key2"]],
+             {:bind, [chan, "test-consumer-queue", "freddy-topic", [routing_key: "routing-key2"]],
               :ok},
-            {:consume,
-              [chan, "test-consumer-queue", ^consumer, _opts],
-              {:ok, _consumer_tag}}] = Adapter.Backdoor.last_events(history, 3)
+             {:consume, [chan, "test-consumer-queue", ^consumer, _opts], {:ok, _consumer_tag}}
+           ] = Adapter.Backdoor.last_events(history, 3)
 
     Freddy.Notifications.Listener.stop(consumer)
   end
