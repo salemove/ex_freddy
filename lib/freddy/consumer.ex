@@ -213,7 +213,8 @@ defmodule Freddy.Consumer do
         do: :ok
 
       defoverridable [init: 1, handle_ready: 2,
-                      handle_message: 3, handle_info: 2, handle_error: 4,
+                      handle_message: 3, handle_error: 4,
+                      handle_cast: 2, handle_call: 3, handle_info: 2,
                       terminate: 2]
     end
   end
