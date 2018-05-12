@@ -12,7 +12,7 @@ defmodule Freddy.Notifications.BroadcasterTest do
       Freddy.Notifications.Broadcaster.start_link(TestBroadcaster, conn, nil, [])
       exchange_config = [exchange: [name: "freddy-topic", type: :topic]]
 
-      assert called Freddy.Publisher.start_link(TestBroadcaster, conn, exchange_config, nil, [])
+      assert called(Freddy.Publisher.start_link(TestBroadcaster, conn, exchange_config, nil, []))
     end
   end
 
@@ -24,7 +24,7 @@ defmodule Freddy.Notifications.BroadcasterTest do
 
       Freddy.Notifications.Broadcaster.broadcast(pid, routing_key, payload)
 
-      assert called Freddy.Publisher.publish(pid, payload, routing_key, [])
+      assert called(Freddy.Publisher.publish(pid, payload, routing_key, []))
     end
   end
 end

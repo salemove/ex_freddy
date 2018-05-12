@@ -52,11 +52,11 @@ defmodule Freddy.Publisher do
   Check it for more detailed information.
   """
 
-  @type payload     :: term
-  @type routing_key :: Hare.Adapter.routing_key
-  @type opts        :: Hare.Adapter.opts
-  @type meta        :: map
-  @type state       :: term
+  @type payload :: term
+  @type routing_key :: Hare.Adapter.routing_key()
+  @type opts :: Hare.Adapter.opts()
+  @type meta :: map
+  @type state :: term
 
   @doc """
   Called when the publisher process is first started. `start_link/5` will block
@@ -77,9 +77,9 @@ defmodule Freddy.Publisher do
   or calling `terminate/2`.
   """
   @callback init(initial :: term) ::
-              {:ok, state} |
-              :ignore |
-              {:stop, reason :: term}
+              {:ok, state}
+              | :ignore
+              | {:stop, reason :: term}
 
   @doc """
   Called before a message will be published to the exchange.
@@ -102,23 +102,23 @@ defmodule Freddy.Publisher do
   reason `reason`.
   """
   @callback before_publication(payload, routing_key, opts :: term, state) ::
-              {:ok, state} |
-              {:ok, payload, routing_key, opts :: term, state} |
-              {:ignore, state} |
-              {:stop, reason :: term, state}
+              {:ok, state}
+              | {:ok, payload, routing_key, opts :: term, state}
+              | {:ignore, state}
+              | {:stop, reason :: term, state}
 
   @doc """
   Called when the process receives a call message sent by `call/3`. This
   callback has the same arguments as the `GenServer` equivalent and the
   `:reply`, `:noreply` and `:stop` return tuples behave the same.
   """
-  @callback handle_call(request :: term, GenServer.from, state) ::
-              {:reply, reply :: term, state} |
-              {:reply, reply :: term, state, timeout | :hibernate} |
-              {:noreply, state} |
-              {:noreply, state, timeout | :hibernate} |
-              {:stop, reason :: term, state} |
-              {:stop, reason :: term, reply :: term, state}
+  @callback handle_call(request :: term, GenServer.from(), state) ::
+              {:reply, reply :: term, state}
+              | {:reply, reply :: term, state, timeout | :hibernate}
+              | {:noreply, state}
+              | {:noreply, state, timeout | :hibernate}
+              | {:stop, reason :: term, state}
+              | {:stop, reason :: term, reply :: term, state}
 
   @doc """
   Called when the process receives a cast message sent by `cast/3`. This
@@ -126,9 +126,9 @@ defmodule Freddy.Publisher do
   `:noreply` and `:stop` return tuples behave the same.
   """
   @callback handle_cast(request :: term, state) ::
-              {:noreply, state} |
-              {:noreply, state, timeout | :hibernate} |
-              {:stop, reason :: term, state}
+              {:noreply, state}
+              | {:noreply, state, timeout | :hibernate}
+              | {:stop, reason :: term, state}
 
   @doc """
   Called when the process receives a message. This callback has the same
@@ -136,17 +136,16 @@ defmodule Freddy.Publisher do
   return tuples behave the same.
   """
   @callback handle_info(message :: term, state) ::
-              {:noreply, state} |
-              {:noreply, state, timeout | :hibernate} |
-              {:stop, reason :: term, state}
+              {:noreply, state}
+              | {:noreply, state, timeout | :hibernate}
+              | {:stop, reason :: term, state}
 
   @doc """
   This callback is the same as the `GenServer` equivalent and is called when the
   process terminates. The first argument is the reason the process is about
   to exit with.
   """
-  @callback terminate(reason :: term, state) ::
-              any
+  @callback terminate(reason :: term, state) :: any
 
   defmacro __using__(_opts \\ []) do
     quote location: :keep do
@@ -176,15 +175,18 @@ defmodule Freddy.Publisher do
       def terminate(_reason, _state),
         do: :ok
 
-      defoverridable [init: 1, terminate: 2,
-                      before_publication: 4,
-                      handle_call: 3, handle_cast: 2, handle_info: 2]
+      defoverridable init: 1,
+                     terminate: 2,
+                     before_publication: 4,
+                     handle_call: 3,
+                     handle_cast: 2,
+                     handle_info: 2
     end
   end
 
   use Hare.Publisher
 
-  @type config :: [exchange: Hare.Context.Action.DeclareExchange.config]
+  @type config :: [exchange: Hare.Context.Action.DeclareExchange.config()]
 
   @compile {:inline, start_link: 4, start_link: 5, stop: 1, stop: 2}
 
@@ -201,15 +203,16 @@ defmodule Freddy.Publisher do
     * `initial` - the value that will be given to `init/1`
     * `opts` - the GenServer options
   """
-  @spec start_link(module, GenServer.server, config, initial :: term, GenServer.options) :: GenServer.on_start
+  @spec start_link(module, GenServer.server(), config, initial :: term, GenServer.options()) ::
+          GenServer.on_start()
   def start_link(mod, conn, config, initial, opts \\ []) do
     Hare.Publisher.start_link(__MODULE__, conn, config, {mod, initial}, opts)
   end
 
   defdelegate publish(publisher, payload, routing_key \\ "", opts \\ []), to: Hare.Publisher
-  defdelegate call(publisher, message),           to: Hare.Publisher
-  defdelegate call(publisher, message, timeout),  to: Hare.Publisher
-  defdelegate cast(publisher, message),           to: Hare.Publisher
+  defdelegate call(publisher, message), to: Hare.Publisher
+  defdelegate call(publisher, message, timeout), to: Hare.Publisher
+  defdelegate cast(publisher, message), to: Hare.Publisher
   defdelegate stop(publisher, reason \\ :normal), to: GenServer
 
   # Hare.Publisher callbacks
@@ -230,7 +233,8 @@ defmodule Freddy.Publisher do
         {:ok, Poison.encode!(payload), routing_key, complete_opts(opts), {mod, new_state}}
 
       {:ok, new_payload, new_routing_key, new_opts, new_state} ->
-        {:ok, Poison.encode!(new_payload), new_routing_key, complete_opts(new_opts), {mod, new_state}}
+        {:ok, Poison.encode!(new_payload), new_routing_key, complete_opts(new_opts),
+         {mod, new_state}}
 
       {:ignore, new_state} ->
         {:ignore, {mod, new_state}}

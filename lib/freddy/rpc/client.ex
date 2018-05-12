@@ -18,13 +18,13 @@ defmodule Freddy.RPC.Client do
       PaymentsService.request(client, "Payments", %{type: "get_history", site_id: "xxx"})
   """
 
-  @type payload     :: term
-  @type request     :: Freddy.RPC.Request.t
-  @type response    :: term
-  @type routing_key :: Hare.Adapter.routing_key
-  @type opts        :: Hare.Adapter.opts
-  @type meta        :: map
-  @type state       :: term
+  @type payload :: term
+  @type request :: Freddy.RPC.Request.t()
+  @type response :: term
+  @type routing_key :: Hare.Adapter.routing_key()
+  @type opts :: Hare.Adapter.opts()
+  @type meta :: map
+  @type state :: term
 
   @doc """
   Called when the RPC client process is first started. `start_link/5` will block
@@ -46,10 +46,9 @@ defmodule Freddy.RPC.Client do
   or calling `terminate/2`.
   """
   @callback init(initial :: term) ::
-              {:ok, state} |
-              :ignore |
-              {:stop, reason :: term}
-
+              {:ok, state}
+              | :ignore
+              | {:stop, reason :: term}
 
   @doc """
   Called when the AMQP server has registered the process as a consumer of the
@@ -63,8 +62,8 @@ defmodule Freddy.RPC.Client do
   reason `reason`.
   """
   @callback handle_ready(meta, state) ::
-              {:noreply, state} |
-              {:stop, reason :: term, state}
+              {:noreply, state}
+              | {:stop, reason :: term, state}
 
   @doc """
   Called before a request will be performed to the exchange.
@@ -100,11 +99,11 @@ defmodule Freddy.RPC.Client do
   reason `reason`.
   """
   @callback before_request(request, state) ::
-              {:ok, state} |
-              {:ok, request, state} |
-              {:reply, response, state} |
-              {:stop, reason :: term, response, state} |
-              {:stop, reason :: term, state}
+              {:ok, state}
+              | {:ok, request, state}
+              | {:reply, response, state}
+              | {:stop, reason :: term, response, state}
+              | {:stop, reason :: term, state}
 
   @doc """
   Called when a response has been received, before it is delivered to the caller.
@@ -128,12 +127,12 @@ defmodule Freddy.RPC.Client do
   `terminate(reason, state)` before the process exits with reason `reason`.
   """
   @callback on_response(response, request, state) ::
-              {:reply, response, state} |
-              {:reply, response, state, timeout | :hibernate} |
-              {:noreply, state} |
-              {:noreply, state, timeout | :hibernate} |
-              {:stop, reason :: term, response, state} |
-              {:stop, reason :: term, state}
+              {:reply, response, state}
+              | {:reply, response, state, timeout | :hibernate}
+              | {:noreply, state}
+              | {:noreply, state, timeout | :hibernate}
+              | {:stop, reason :: term, response, state}
+              | {:stop, reason :: term, state}
 
   @doc """
   Called when a request has timed out.
@@ -153,12 +152,12 @@ defmodule Freddy.RPC.Client do
   `terminate(reason, state)` before the process exits with reason `reason`.
   """
   @callback on_timeout(request, state) ::
-              {:reply, response, state} |
-              {:reply, response, state, timeout | :hibernate} |
-              {:noreply, state} |
-              {:noreply, state, timeout | :hibernate} |
-              {:stop, reason :: term, response, state} |
-              {:stop, reason :: term, state}
+              {:reply, response, state}
+              | {:reply, response, state, timeout | :hibernate}
+              | {:noreply, state}
+              | {:noreply, state, timeout | :hibernate}
+              | {:stop, reason :: term, response, state}
+              | {:stop, reason :: term, state}
 
   @doc """
   Called when a request has been returned by AMPQ broker.
@@ -178,25 +177,25 @@ defmodule Freddy.RPC.Client do
   `terminate(reason, state)` before the process exits with reason `reason`.
   """
   @callback on_return(request, state) ::
-              {:reply, response, state} |
-              {:reply, response, state, timeout | :hibernate} |
-              {:noreply, state} |
-              {:noreply, state, timeout | :hibernate} |
-              {:stop, reason :: term, response, state} |
-              {:stop, reason :: term, state}
+              {:reply, response, state}
+              | {:reply, response, state, timeout | :hibernate}
+              | {:noreply, state}
+              | {:noreply, state, timeout | :hibernate}
+              | {:stop, reason :: term, response, state}
+              | {:stop, reason :: term, state}
 
   @doc """
   Called when the process receives a call message sent by `call/3`. This
   callback has the same arguments as the `GenServer` equivalent and the
   `:reply`, `:noreply` and `:stop` return tuples behave the same.
   """
-  @callback handle_call(request :: term, GenServer.from, state) ::
-              {:reply, reply :: term, state} |
-              {:reply, reply :: term, state, timeout | :hibernate} |
-              {:noreply, state} |
-              {:noreply, state, timeout | :hibernate} |
-              {:stop, reason :: term, state} |
-              {:stop, reason :: term, reply :: term, state}
+  @callback handle_call(request :: term, GenServer.from(), state) ::
+              {:reply, reply :: term, state}
+              | {:reply, reply :: term, state, timeout | :hibernate}
+              | {:noreply, state}
+              | {:noreply, state, timeout | :hibernate}
+              | {:stop, reason :: term, state}
+              | {:stop, reason :: term, reply :: term, state}
 
   @doc """
   Called when the process receives a cast message sent by `cast/3`. This
@@ -204,9 +203,9 @@ defmodule Freddy.RPC.Client do
   `:noreply` and `:stop` return tuples behave the same.
   """
   @callback handle_cast(request :: term, state) ::
-              {:noreply, state} |
-              {:noreply, state, timeout | :hibernate} |
-              {:stop, reason :: term, state}
+              {:noreply, state}
+              | {:noreply, state, timeout | :hibernate}
+              | {:stop, reason :: term, state}
 
   @doc """
   Called when the process receives a message. This callback has the same
@@ -214,17 +213,16 @@ defmodule Freddy.RPC.Client do
   return tuples behave the same.
   """
   @callback handle_info(message :: term, state) ::
-              {:noreply, state} |
-              {:noreply, state, timeout | :hibernate} |
-              {:stop, reason :: term, state}
+              {:noreply, state}
+              | {:noreply, state, timeout | :hibernate}
+              | {:stop, reason :: term, state}
 
   @doc """
   This callback is the same as the `GenServer` equivalent and is called when the
   process terminates. The first argument is the reason the process is about
   to exit with.
   """
-  @callback terminate(reason :: term, state) ::
-              any
+  @callback terminate(reason :: term, state) :: any
 
   defmacro __using__(_opts \\ []) do
     quote location: :keep do
@@ -269,10 +267,16 @@ defmodule Freddy.RPC.Client do
       def terminate(_reason, _state),
         do: :ok
 
-      defoverridable [init: 1, terminate: 2,
-                      handle_ready: 2, before_request: 2,
-                      on_response: 3, on_timeout: 2, on_return: 2,
-                      handle_call: 3, handle_cast: 2, handle_info: 2]
+      defoverridable init: 1,
+                     terminate: 2,
+                     handle_ready: 2,
+                     before_request: 2,
+                     on_response: 3,
+                     on_timeout: 2,
+                     on_return: 2,
+                     handle_call: 3,
+                     handle_cast: 2,
+                     handle_info: 2
     end
   end
 
@@ -286,8 +290,7 @@ defmodule Freddy.RPC.Client do
   @default_timeout 3000
   @gen_server_timeout 10000
 
-  @type config :: [timeout: timeout,
-                   exchange: Hare.Context.Action.DeclareExchange.config]
+  @type config :: [timeout: timeout, exchange: Hare.Context.Action.DeclareExchange.config()]
 
   @doc """
   Starts a `Freddy.RPC.Client` process linked to the current process.
@@ -304,9 +307,9 @@ defmodule Freddy.RPC.Client do
     * `initial` - the value that will be given to `init/1`
     * `opts` - the GenServer options
   """
-  @spec start_link(module, GenServer.server, config, initial :: term, GenServer.options) ::
-          GenServer.on_start |
-          no_return()
+  @spec start_link(module, GenServer.server(), config, initial :: term, GenServer.options()) ::
+          GenServer.on_start()
+          | no_return()
   def start_link(mod, conn, config, initial, opts \\ []) do
     exchange = Keyword.get(config, :exchange, [])
     timeout = Keyword.get(config, :timeout, @default_timeout)
@@ -320,18 +323,18 @@ defmodule Freddy.RPC.Client do
     )
   end
 
-  defdelegate call(client, message),           to: Hare.RPC.Client
-  defdelegate call(client, message, timeout),  to: Hare.RPC.Client
-  defdelegate cast(client, message),           to: Hare.RPC.Client
+  defdelegate call(client, message), to: Hare.RPC.Client
+  defdelegate call(client, message, timeout), to: Hare.RPC.Client
+  defdelegate cast(client, message), to: Hare.RPC.Client
   defdelegate stop(client, reason \\ :normal), to: GenServer
 
   @doc """
   Performs a RPC request and blocks until the response arrives.
   """
-  @spec request(GenServer.server, routing_key, payload, GenServer.options) ::
-          {:ok, response} |
-          {:error, reason :: term} |
-          {:error, reason :: term, hint :: term}
+  @spec request(GenServer.server(), routing_key, payload, GenServer.options()) ::
+          {:ok, response}
+          | {:error, reason :: term}
+          | {:error, reason :: term, hint :: term}
   def request(client, routing_key, payload, opts \\ []) do
     Hare.Actor.call(client, {:"$hare_request", payload, routing_key, opts}, @gen_server_timeout)
   end
@@ -377,18 +380,24 @@ defmodule Freddy.RPC.Client do
     end
   end
 
-  defp send_request(%{payload: payload, routing_key: routing_key, options: options} = request, new_given, state) do
+  defp send_request(
+         %{payload: payload, routing_key: routing_key, options: options} = request,
+         new_given,
+         state
+       ) do
     case Poison.encode(payload) do
       {:ok, encoded_payload} ->
-        freddy_options = [mandatory: true,
-                          content_type: "application/json",
-                          expiration: to_string(state.timeout),
-                          type: "request"]
+        freddy_options = [
+          mandatory: true,
+          content_type: "application/json",
+          expiration: to_string(state.timeout),
+          type: "request"
+        ]
 
         options = Keyword.merge(options, freddy_options)
         new_state = state |> State.update(new_given) |> State.push_waiting(request)
 
-        Logger.debug fn -> "Sending request to #{routing_key}: #{encoded_payload}" end
+        Logger.debug(fn -> "Sending request to #{routing_key}: #{encoded_payload}" end)
 
         {:ok, encoded_payload, routing_key, options, new_state}
 
@@ -526,28 +535,36 @@ defmodule Freddy.RPC.Client do
 
   defp handle_response({:ok, %{"success" => true, "output" => result}}),
     do: {:ok, result}
+
   defp handle_response({:ok, %{"success" => true} = payload}),
     do: {:ok, Map.delete(payload, "success")}
+
   defp handle_response({:ok, %{"success" => false, "error" => error}}),
     do: {:error, :invalid_request, error}
+
   defp handle_response({:ok, %{"success" => false} = payload}),
     do: {:error, :invalid_request, Map.delete(payload, "success")}
+
   defp handle_response({:ok, payload}),
     do: {:error, :invalid_request, payload}
+
   defp handle_response({:error, json_error}),
     do: {:error, :protocol_error, json_error}
 
   defp log_response(response, %{routing_key: routing_key} = request) do
-    Logger.debug fn ->
+    Logger.debug(fn ->
       ["Response received from ", routing_key, " after #{Request.duration(request)} ms:", response]
-    end
+    end)
 
     response
   end
 
   defp log_timeout(%{routing_key: routing_key} = request),
-    do: Logger.error fn -> ["RPC call to ", routing_key, " timed out after #{Request.duration(request)} ms"] end
+    do:
+      Logger.error(fn ->
+        ["RPC call to ", routing_key, " timed out after #{Request.duration(request)} ms"]
+      end)
 
   defp log_return(%{routing_key: routing_key} = _request),
-    do: Logger.error fn -> ["RPC call to ", routing_key, " couldn't be routed"] end
+    do: Logger.error(fn -> ["RPC call to ", routing_key, " couldn't be routed"] end)
 end

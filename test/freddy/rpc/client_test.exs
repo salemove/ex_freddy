@@ -40,42 +40,40 @@ defmodule Freddy.RPC.ClientTest do
     assert_receive {:ready, %{resp_queue: resp_queue}}
     %{consumer_tag: consumer_tag, name: resp_queue_name} = resp_queue
 
-    assert [{:open_channel,
-              [_conn],
-              {:ok, channel}},
-            {:monitor_channel,
-              [channel],
-              _ref},
-            {:declare_server_named_queue,
-              [channel, [auto_delete: true, exclusive: true]],
+    assert [
+             {:open_channel, [_conn], {:ok, channel}},
+             {:monitor_channel, [channel], _ref},
+             {:declare_server_named_queue, [channel, [auto_delete: true, exclusive: true]],
               {:ok, ^resp_queue_name, _queue_info}},
-            {:consume,
-              [channel, ^resp_queue_name, ^rpc_client, [no_ack: true]],
+             {:consume, [channel, ^resp_queue_name, ^rpc_client, [no_ack: true]],
               {:ok, ^consumer_tag}},
-            {:register_return_handler,
-              [channel, ^rpc_client],
-              :ok}] = Adapter.Backdoor.last_events(history, 5)
+             {:register_return_handler, [channel, ^rpc_client], :ok}
+           ] = Adapter.Backdoor.last_events(history, 5)
   end
 
   describe "before_request/3" do
-    test "sends original payload and original routing key on {:ok, state}", %{conn: conn, history: history} do
+    test "sends original payload and original routing key on {:ok, state}", %{
+      conn: conn,
+      history: history
+    } do
       rpc_client = start_client(conn, [])
 
       routing_key = "TestQueue"
       payload = %{type: "action", key: "value"}
       encoded_payload = Poison.encode!(payload)
 
-      request = Task.async fn ->
-        Freddy.RPC.Client.request(rpc_client, routing_key, payload)
-      end
+      request =
+        Task.async(fn ->
+          Freddy.RPC.Client.request(rpc_client, routing_key, payload)
+        end)
 
-      assert_receive {:before_request, %{payload: ^payload, routing_key: ^routing_key, options: _opts}}
+      assert_receive {:before_request,
+                      %{payload: ^payload, routing_key: ^routing_key, options: _opts}}
 
       assert nil == Task.yield(request, 100)
 
-      assert {:publish,
-              [_chan, "" = _exchange, ^encoded_payload, ^routing_key, options],
-              :ok} = Adapter.Backdoor.last_event(history)
+      assert {:publish, [_chan, "" = _exchange, ^encoded_payload, ^routing_key, options], :ok} =
+               Adapter.Backdoor.last_event(history)
 
       %{correlation_id: correlation_id} = assert_options_injected(options)
       respond_to(rpc_client, %{success: true, output: 42}, %{correlation_id: correlation_id})
@@ -83,7 +81,10 @@ defmodule Freddy.RPC.ClientTest do
       assert {:ok, 42} = Task.await(request)
     end
 
-    test "sends modified routing key, payload and options on {:ok, request, state}", %{conn: conn, history: history} do
+    test "sends modified routing key, payload and options on {:ok, request, state}", %{
+      conn: conn,
+      history: history
+    } do
       rpc_client = start_client(conn, [])
 
       original_routing_key = "TestQueue"
@@ -95,18 +96,28 @@ defmodule Freddy.RPC.ClientTest do
 
       modified_options = [app_id: "testapp2"]
 
-      options = [app_id: "testapp", hook: {:modify, %{
-        payload: modified_payload,
-        routing_key: modified_routing_key,
-        options: modified_options
-      }}]
+      options = [
+        app_id: "testapp",
+        hook:
+          {:modify,
+           %{
+             payload: modified_payload,
+             routing_key: modified_routing_key,
+             options: modified_options
+           }}
+      ]
 
-      request = Task.async fn ->
-        Freddy.RPC.Client.request(rpc_client, original_routing_key, original_payload, options)
-      end
+      request =
+        Task.async(fn ->
+          Freddy.RPC.Client.request(rpc_client, original_routing_key, original_payload, options)
+        end)
 
       assert_receive {:before_request,
-                       %{payload: ^original_payload, routing_key: ^original_routing_key, options: given_options}}
+                      %{
+                        payload: ^original_payload,
+                        routing_key: ^original_routing_key,
+                        options: given_options
+                      }}
 
       assert given_options[:app_id] == "testapp"
       assert Keyword.has_key?(given_options, :correlation_id)
@@ -125,7 +136,9 @@ defmodule Freddy.RPC.ClientTest do
 
     test "returns reply on {:reply, reply, state}", %{conn: conn} do
       rpc_client = start_client(conn, [])
-      assert :response = Freddy.RPC.Client.request(rpc_client, "key", "payload", hook: {:reply, :response})
+
+      assert :response =
+               Freddy.RPC.Client.request(rpc_client, "key", "payload", hook: {:reply, :response})
     end
 
     test "stops the process on {:stop, reason, reply, state}", %{conn: conn} do
@@ -133,19 +146,27 @@ defmodule Freddy.RPC.ClientTest do
 
       ref = Process.monitor(rpc_client)
 
-      assert :response = Freddy.RPC.Client.request(rpc_client, "key", "payload", hook: {:stop, :normal, :response})
+      assert :response =
+               Freddy.RPC.Client.request(
+                 rpc_client,
+                 "key",
+                 "payload",
+                 hook: {:stop, :normal, :response}
+               )
+
       assert_receive {:DOWN, ^ref, :process, ^rpc_client, :normal}
     end
   end
 
   test "returns `{:error, :timeout}` on timeouts", %{conn: conn} do
-    rpc_client = start_client(conn, [timeout: 1])
+    rpc_client = start_client(conn, timeout: 1)
     routing_key = "TestQueue"
     initial_state = TestClient.get_state(rpc_client)
 
-    request = Task.async fn ->
-      Freddy.RPC.Client.request(rpc_client, routing_key, %{})
-    end
+    request =
+      Task.async(fn ->
+        Freddy.RPC.Client.request(rpc_client, routing_key, %{})
+      end)
 
     assert {:ok, result} = Task.yield(request, 100)
     assert {:error, :timeout} == result
@@ -158,9 +179,11 @@ defmodule Freddy.RPC.ClientTest do
     routing_key = "TestQueue"
     initial_state = TestClient.get_state(rpc_client)
 
-    request = Task.async fn ->
-      Freddy.RPC.Client.request(rpc_client, routing_key, %{})
-    end
+    request =
+      Task.async(fn ->
+        Freddy.RPC.Client.request(rpc_client, routing_key, %{})
+      end)
+
     assert_receive {:before_request, %{options: [correlation_id: correlation_id]}}
 
     send(rpc_client, {:return, "", %{correlation_id: correlation_id}})

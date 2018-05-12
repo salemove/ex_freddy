@@ -78,15 +78,13 @@ defmodule Freddy.ConsumerTest do
       assert %{chan: chan, name: "test-consumer-queue"} = queue
       assert %{chan: ^chan, name: "freddy-topic"} = exchange
 
-      assert [{:bind,
-                [chan, "test-consumer-queue", "freddy-topic", [routing_key: "routing-key1"]],
+      assert [
+               {:bind, [chan, "test-consumer-queue", "freddy-topic", [routing_key: "routing-key1"]],
                 :ok},
-              {:bind,
-                [chan, "test-consumer-queue", "freddy-topic", [routing_key: "routing-key2"]],
+               {:bind, [chan, "test-consumer-queue", "freddy-topic", [routing_key: "routing-key2"]],
                 :ok},
-              {:consume,
-                [chan, "test-consumer-queue", ^consumer, _opts],
-                {:ok, _consumer_tag}}] = Adapter.Backdoor.last_events(history, 3)
+               {:consume, [chan, "test-consumer-queue", ^consumer, _opts], {:ok, _consumer_tag}}
+             ] = Adapter.Backdoor.last_events(history, 3)
 
       tear_down(consumer)
     end
@@ -97,7 +95,9 @@ defmodule Freddy.ConsumerTest do
   end
 
   describe "consumer main loop" do
-    test "handle_message/3 callback is called when RabbitMQ delivers valid JSON message", %{conn: conn} do
+    test "handle_message/3 callback is called when RabbitMQ delivers valid JSON message", %{
+      conn: conn
+    } do
       payload = %{"key" => "value"}
       routing_key = "routing-key1"
       meta = %{routing_key: routing_key}
@@ -112,7 +112,8 @@ defmodule Freddy.ConsumerTest do
       tear_down(consumer)
     end
 
-    test "handle_error/4 callback is called when RabbitMQ delivers message with non-JSON payload", %{conn: conn} do
+    test "handle_error/4 callback is called when RabbitMQ delivers message with non-JSON payload",
+         %{conn: conn} do
       payload = "invalid JSON"
       routing_key = "routing-key1"
       meta = %{routing_key: routing_key}
@@ -122,7 +123,8 @@ defmodule Freddy.ConsumerTest do
         |> start_consumer()
         |> deliver_message(payload, meta)
 
-      assert_receive {:error, {:error, {:invalid, _token, _pos}}, ^payload, %{routing_key: ^routing_key} = _meta}
+      assert_receive {:error, {:error, {:invalid, _token, _pos}}, ^payload,
+                      %{routing_key: ^routing_key} = _meta}
 
       tear_down(consumer)
     end

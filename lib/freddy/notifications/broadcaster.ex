@@ -11,7 +11,8 @@ defmodule Freddy.Notifications.Broadcaster do
     quote location: :keep do
       use Freddy.Publisher
 
-      defdelegate broadcast(broadcaster, routing_key, payload, opts \\ []), to: Freddy.Notifications.Broadcaster
+      defdelegate broadcast(broadcaster, routing_key, payload, opts \\ []),
+        to: Freddy.Notifications.Broadcaster
     end
   end
 
@@ -32,7 +33,8 @@ defmodule Freddy.Notifications.Broadcaster do
     * `initial` - the value that will be given to `init/1`
     * `opts` - the GenServer options
   """
-  @spec start_link(module, GenServer.server, initial :: term, GenServer.options) :: GenServer.on_start
+  @spec start_link(module, GenServer.server(), initial :: term, GenServer.options()) ::
+          GenServer.on_start()
   def start_link(mod, conn, initial, opts \\ []) do
     Freddy.Publisher.start_link(mod, conn, [exchange: @exchange_config], initial, opts)
   end
