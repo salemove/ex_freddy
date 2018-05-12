@@ -10,6 +10,16 @@ defmodule Freddy.RPC.ClientTest do
       Client.start_link(__MODULE__, conn, config, pid, opts)
     end
 
+    def handle_connected(pid) do
+      send(pid, :connected)
+      {:noreply, pid}
+    end
+
+    def handle_disconnected(reason, pid) do
+      send(pid, {:disconnected, reason})
+      {:noreply, pid}
+    end
+
     def handle_ready(meta, pid) do
       send(pid, {:ready, meta})
       {:noreply, pid}
@@ -35,6 +45,11 @@ defmodule Freddy.RPC.ClientTest do
     end
   end
 
+  test "calls handle_connected/1 when RabbitMQ connection is established", %{conn: conn} do
+    start_client(conn, [])
+    assert_receive :connected
+  end
+
   test "starts consumption and sets up return handler on start", %{conn: conn, history: history} do
     rpc_client = start_client(conn, [])
     assert_receive {:ready, %{resp_queue: resp_queue}}
@@ -49,6 +64,14 @@ defmodule Freddy.RPC.ClientTest do
               {:ok, ^consumer_tag}},
              {:register_return_handler, [channel, ^rpc_client], :ok}
            ] = Adapter.Backdoor.last_events(history, 5)
+  end
+
+  test "calls handle_disconnected/2 when RabbitMQ connection is disrupted", %{conn: conn} do
+    start_client(conn, [])
+    assert_receive {:ready, %{resp_queue: %{chan: chan}}}
+
+    Adapter.Backdoor.crash(chan.given, :simulated_crash)
+    assert_receive {:disconnected, :simulated_crash}
   end
 
   describe "before_request/3" do
