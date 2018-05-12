@@ -65,6 +65,20 @@ defmodule Freddy.Consumer do
               | {:stop, reason :: term}
 
   @doc """
+  Called when the consumer process has opened AMQP channel before registering
+  itself as a consumer in AMQP broker.
+
+  Returning `{:noreply, state}` will cause the process to enter the main loop
+  with the given state.
+
+  Returning `{:stop, reason, state}` will terminate the main loop and call
+  `terminate(reason, state)` before the process exits with reason `reason`.
+  """
+  @callback handle_connected(state) ::
+              {:noreply, state}
+              | {:stop, reason :: term, state}
+
+  @doc """
   Called when the AMQP server has registered the process as a consumer and it
   will start to receive messages.
 
@@ -75,6 +89,20 @@ defmodule Freddy.Consumer do
   `terminate(reason, state)` before the process exits with reason `reason`.
   """
   @callback handle_ready(meta, state) ::
+              {:noreply, state}
+              | {:stop, reason :: term, state}
+
+  @doc """
+  Called when the AMQP consumer has been disconnected from the AMQP broker.
+
+  Returning `{:noreply, state}` causes the process to enter the main loop with
+  the given state. The process will not consume any new messages until connection
+  to AMQP broker is established again.
+
+  Returning `{:stop, reason, state}` will terminate the main loop and call
+  `terminate(reason, state)` before the process exits with reason `reason`.
+  """
+  @callback handle_disconnected(reason :: term, state) ::
               {:noreply, state}
               | {:stop, reason :: term, state}
 
@@ -183,7 +211,15 @@ defmodule Freddy.Consumer do
         do: {:ok, initial}
 
       @doc false
+      def handle_connected(state),
+        do: {:noreply, state}
+
+      @doc false
       def handle_ready(_meta, state),
+        do: {:noreply, state}
+
+      @doc false
+      def handle_disconnected(_reason, state),
         do: {:noreply, state}
 
       @doc false
@@ -211,7 +247,9 @@ defmodule Freddy.Consumer do
         do: :ok
 
       defoverridable init: 1,
+                     handle_connected: 1,
                      handle_ready: 2,
+                     handle_disconnected: 2,
                      handle_message: 3,
                      handle_error: 4,
                      handle_cast: 2,
@@ -277,10 +315,32 @@ defmodule Freddy.Consumer do
   end
 
   @doc false
+  def handle_connected({mod, queue, state}) do
+    case mod.handle_connected(state) do
+      {:noreply, new_state} ->
+        {:noreply, {mod, queue, new_state}}
+
+      {:stop, reason, new_state} ->
+        {:stop, reason, {mod, queue, new_state}}
+    end
+  end
+
+  @doc false
   def handle_ready(%{queue: queue} = meta, {mod, _, state}) do
     case mod.handle_ready(meta, state) do
       {:noreply, new_state} -> {:noreply, {mod, queue, new_state}}
       {:stop, reason, new_state} -> {:stop, reason, {mod, queue, new_state}}
+    end
+  end
+
+  @doc false
+  def handle_disconnected(reason, {mod, queue, state}) do
+    case mod.handle_disconnected(reason, state) do
+      {:noreply, new_state} ->
+        {:noreply, {mod, queue, new_state}}
+
+      {:stop, reason, new_state} ->
+        {:stop, reason, {mod, queue, new_state}}
     end
   end
 

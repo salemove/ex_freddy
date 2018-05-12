@@ -21,9 +21,19 @@ defmodule Freddy.ConsumerTest do
       {:ok, pid}
     end
 
+    def handle_connected(pid) do
+      send(pid, :connected)
+      {:noreply, pid}
+    end
+
     def handle_ready(meta, pid) do
       send(pid, {:ready, meta})
 
+      {:noreply, pid}
+    end
+
+    def handle_disconnected(reason, pid) do
+      send(pid, {:disconnected, reason})
       {:noreply, pid}
     end
 
@@ -55,6 +65,14 @@ defmodule Freddy.ConsumerTest do
       {:ok, consumer} = TestConsumer.start_link(conn, self())
 
       assert_receive :init
+
+      tear_down(consumer)
+    end
+
+    test "handle_connected/1 callback is called when RabbitMQ channel is opened", %{conn: conn} do
+      {:ok, consumer} = TestConsumer.start_link(conn, self())
+
+      assert_receive :connected
 
       tear_down(consumer)
     end
@@ -136,6 +154,15 @@ defmodule Freddy.ConsumerTest do
       assert_receive {:info, :some_message}
 
       tear_down(consumer)
+    end
+
+    test "handle_disconnected/2 callback is called when connection is disrupted", %{conn: conn} do
+      start_consumer(conn)
+      assert_receive {:ready, %{queue: %{chan: chan}} = _meta}
+
+      Adapter.Backdoor.crash(chan.given)
+
+      assert_receive {:disconnected, :simulated_crash}
     end
 
     defp start_consumer(conn) do

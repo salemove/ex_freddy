@@ -51,6 +51,21 @@ defmodule Freddy.RPC.Client do
               | {:stop, reason :: term}
 
   @doc """
+  Called when the RPC client process has opened AMQP channel before registering
+  itself as a consumer.
+
+  Returning `{:noreply, state}` will cause the process to enter the main loop
+  with the given state.
+
+  Returning `{:stop, reason, state}` will terminate the main loop and call
+  `terminate(reason, state)` before the process exits with reason `reason`.
+  """
+  @callback handle_connected(state) ::
+              {:noreply, state}
+              | {:noreply, state, timeout | :hibernate}
+              | {:stop, reason :: term, state}
+
+  @doc """
   Called when the AMQP server has registered the process as a consumer of the
   server-named queue and it will start to receive messages.
 
@@ -63,6 +78,21 @@ defmodule Freddy.RPC.Client do
   """
   @callback handle_ready(meta, state) ::
               {:noreply, state}
+              | {:stop, reason :: term, state}
+
+  @doc """
+  Called when the AMQP server has been disconnected from the AMQP broker.
+
+  Returning `{:noreply, state}` will cause the process to enter the main loop
+  with the given state. The server will not consume any new messages until
+  connection to AMQP broker is restored.
+
+  Returning `{:stop, reason, state}` will terminate the main loop and call
+  `terminate(reason, state)` before the process exits with reason `reason`.
+  """
+  @callback handle_disconnected(reason :: term, state) ::
+              {:noreply, state}
+              | {:noreply, state, timeout | :hibernate}
               | {:stop, reason :: term, state}
 
   @doc """
@@ -233,7 +263,15 @@ defmodule Freddy.RPC.Client do
         do: {:ok, initial}
 
       @doc false
+      def handle_connected(state),
+        do: {:noreply, state}
+
+      @doc false
       def handle_ready(_meta, state),
+        do: {:noreply, state}
+
+      @doc false
+      def handle_disconnected(_reason, state),
         do: {:noreply, state}
 
       @doc false
@@ -269,7 +307,9 @@ defmodule Freddy.RPC.Client do
 
       defoverridable init: 1,
                      terminate: 2,
+                     handle_connected: 1,
                      handle_ready: 2,
+                     handle_disconnected: 2,
                      before_request: 2,
                      on_response: 3,
                      on_timeout: 2,
@@ -351,8 +391,24 @@ defmodule Freddy.RPC.Client do
   end
 
   @doc false
+  def handle_connected(%{mod: mod, given: given} = state) do
+    case mod.handle_connected(given) do
+      {:noreply, new_given} -> {:noreply, State.update(state, new_given)}
+      {:stop, reason, new_given} -> {:stop, reason, State.update(state, new_given)}
+    end
+  end
+
+  @doc false
   def handle_ready(meta, %{mod: mod, given: given} = state) do
     case mod.handle_ready(meta, given) do
+      {:noreply, new_given} -> {:noreply, State.update(state, new_given)}
+      {:stop, reason, new_given} -> {:stop, reason, State.update(state, new_given)}
+    end
+  end
+
+  @doc false
+  def handle_disconnected(reason, %{mod: mod, given: given} = state) do
+    case mod.handle_disconnected(reason, given) do
       {:noreply, new_given} -> {:noreply, State.update(state, new_given)}
       {:stop, reason, new_given} -> {:stop, reason, State.update(state, new_given)}
     end
