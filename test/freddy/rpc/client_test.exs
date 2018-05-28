@@ -1,240 +1,314 @@
 defmodule Freddy.RPC.ClientTest do
-  use Freddy.ConnCase
-
-  alias Freddy.RPC.Client
+  use Freddy.ConnectionCase
 
   defmodule TestClient do
-    use Client
+    use Freddy.RPC.Client
+    alias Freddy.RPC.Request
 
-    def start_link(conn, config, pid \\ self(), opts \\ []) do
-      Client.start_link(__MODULE__, conn, config, pid, opts)
+    @config [exchange: [name: "freddy-rpc-test-exchange", type: :direct]]
+
+    def start_link(conn, pid, opts \\ []) do
+      Freddy.RPC.Client.start_link(__MODULE__, conn, Keyword.merge(@config, opts), pid)
     end
 
+    defdelegate request(client, routing_key, payload, opts \\ []), to: Freddy.RPC.Client
+
+    @impl true
+    def init(pid) do
+      send(pid, :init)
+      {:ok, pid}
+    end
+
+    @impl true
     def handle_connected(pid) do
       send(pid, :connected)
       {:noreply, pid}
     end
 
+    @impl true
+    def handle_ready(%{queue: queue} = _meta, pid) do
+      send(pid, {:ready, queue.name})
+      {:noreply, pid}
+    end
+
+    @impl true
     def handle_disconnected(reason, pid) do
       send(pid, {:disconnected, reason})
       {:noreply, pid}
     end
 
-    def handle_ready(meta, pid) do
-      send(pid, {:ready, meta})
-      {:noreply, pid}
-    end
-
-    def before_request(%{options: opts} = request, pid) do
-      send(pid, {:before_request, request})
-
-      case opts[:hook] do
-        {:modify, fields} -> {:ok, Map.merge(request, fields), pid}
-        {:stop, reason, reply} -> {:stop, reason, reply, pid}
-        {:reply, reply} -> {:reply, reply, pid}
-        nil -> {:ok, pid}
+    @impl true
+    def before_request(request, pid) do
+      case Request.get_option(request, :on_before_action) do
+        {:change, new_payload} -> {:ok, Request.update_payload(request, new_payload), pid}
+        {:reply, response} -> {:reply, response, pid}
+        _other -> super(request, pid)
       end
     end
 
-    def get_state(client) do
-      Client.call(client, :get_state)
+    @impl true
+    def on_response(response, request, pid) do
+      case Request.get_option(request, :on_response_action) do
+        {:reply, response} -> {:reply, response, pid}
+        _other -> super(response, request, pid)
+      end
     end
 
-    def handle_call(:get_state, _from, pid) do
-      {:reply, pid, pid}
-    end
-  end
-
-  test "calls handle_connected/1 when RabbitMQ connection is established", %{conn: conn} do
-    start_client(conn, [])
-    assert_receive :connected
-  end
-
-  test "starts consumption and sets up return handler on start", %{conn: conn, history: history} do
-    rpc_client = start_client(conn, [])
-    assert_receive {:ready, %{resp_queue: resp_queue}}
-    %{consumer_tag: consumer_tag, name: resp_queue_name} = resp_queue
-
-    assert [
-             {:open_channel, [_conn], {:ok, channel}},
-             {:monitor_channel, [channel], _ref},
-             {:declare_server_named_queue, [channel, [auto_delete: true, exclusive: true]],
-              {:ok, ^resp_queue_name, _queue_info}},
-             {:consume, [channel, ^resp_queue_name, ^rpc_client, [no_ack: true]],
-              {:ok, ^consumer_tag}},
-             {:register_return_handler, [channel, ^rpc_client], :ok}
-           ] = Adapter.Backdoor.last_events(history, 5)
-  end
-
-  test "calls handle_disconnected/2 when RabbitMQ connection is disrupted", %{conn: conn} do
-    start_client(conn, [])
-    assert_receive {:ready, %{resp_queue: %{chan: chan}}}
-
-    Adapter.Backdoor.crash(chan.given, :simulated_crash)
-    assert_receive {:disconnected, :simulated_crash}
-  end
-
-  describe "before_request/3" do
-    test "sends original payload and original routing key on {:ok, state}", %{
-      conn: conn,
-      history: history
-    } do
-      rpc_client = start_client(conn, [])
-
-      routing_key = "TestQueue"
-      payload = %{type: "action", key: "value"}
-      encoded_payload = Poison.encode!(payload)
-
-      request =
-        Task.async(fn ->
-          Freddy.RPC.Client.request(rpc_client, routing_key, payload)
-        end)
-
-      assert_receive {:before_request,
-                      %{payload: ^payload, routing_key: ^routing_key, options: _opts}}
-
-      assert nil == Task.yield(request, 100)
-
-      assert {:publish, [_chan, "" = _exchange, ^encoded_payload, ^routing_key, options], :ok} =
-               Adapter.Backdoor.last_event(history)
-
-      %{correlation_id: correlation_id} = assert_options_injected(options)
-      respond_to(rpc_client, %{success: true, output: 42}, %{correlation_id: correlation_id})
-
-      assert {:ok, 42} = Task.await(request)
+    @impl true
+    def on_timeout(request, pid) do
+      case Request.get_option(request, :on_timeout_action) do
+        {:reply, response} -> {:reply, response, pid}
+        _other -> super(request, pid)
+      end
     end
 
-    test "sends modified routing key, payload and options on {:ok, request, state}", %{
-      conn: conn,
-      history: history
-    } do
-      rpc_client = start_client(conn, [])
-
-      original_routing_key = "TestQueue"
-      modified_routing_key = "TestQueue2"
-
-      original_payload = %{type: "action", key: "value"}
-      modified_payload = %{type: "another_action", key: "new_value"}
-      encoded_payload = Poison.encode!(modified_payload)
-
-      modified_options = [app_id: "testapp2"]
-
-      options = [
-        app_id: "testapp",
-        hook:
-          {:modify,
-           %{
-             payload: modified_payload,
-             routing_key: modified_routing_key,
-             options: modified_options
-           }}
-      ]
-
-      request =
-        Task.async(fn ->
-          Freddy.RPC.Client.request(rpc_client, original_routing_key, original_payload, options)
-        end)
-
-      assert_receive {:before_request,
-                      %{
-                        payload: ^original_payload,
-                        routing_key: ^original_routing_key,
-                        options: given_options
-                      }}
-
-      assert given_options[:app_id] == "testapp"
-      assert Keyword.has_key?(given_options, :correlation_id)
-
-      assert nil == Task.yield(request, 100)
-
-      assert {:publish,
-              [_chan, "" = _exchange, ^encoded_payload, ^modified_routing_key, published_options],
-              :ok} = Adapter.Backdoor.last_event(history)
-
-      %{correlation_id: correlation_id} = assert_options_injected(published_options)
-      respond_to(rpc_client, %{success: true, output: 42}, %{correlation_id: correlation_id})
-
-      assert {:ok, 42} = Task.await(request)
+    @impl true
+    def on_return(request, pid) do
+      case Request.get_option(request, :on_return_action) do
+        {:reply, response} -> {:reply, response, pid}
+        _other -> super(request, pid)
+      end
     end
 
-    test "returns reply on {:reply, reply, state}", %{conn: conn} do
-      rpc_client = start_client(conn, [])
-
-      assert :response =
-               Freddy.RPC.Client.request(rpc_client, "key", "payload", hook: {:reply, :response})
+    @impl true
+    def handle_call(:call, _from, pid) do
+      {:reply, :response, pid}
     end
 
-    test "stops the process on {:stop, reason, reply, state}", %{conn: conn} do
-      rpc_client = start_client(conn, [])
+    @impl true
+    def handle_cast(:cast, pid) do
+      send(pid, :cast)
+      {:noreply, pid}
+    end
 
-      ref = Process.monitor(rpc_client)
+    @impl true
+    def handle_info(:info, pid) do
+      send(pid, :info)
+      {:noreply, pid}
+    end
 
-      assert :response =
-               Freddy.RPC.Client.request(
-                 rpc_client,
-                 "key",
-                 "payload",
-                 hook: {:stop, :normal, :response}
-               )
-
-      assert_receive {:DOWN, ^ref, :process, ^rpc_client, :normal}
+    @impl true
+    def terminate(reason, pid) do
+      send(pid, {:terminate, reason})
     end
   end
 
-  test "returns `{:error, :timeout}` on timeouts", %{conn: conn} do
-    rpc_client = start_client(conn, timeout: 1)
-    routing_key = "TestQueue"
-    initial_state = TestClient.get_state(rpc_client)
+  # simple echo server
+  defmodule TestServer do
+    use Freddy.Consumer
 
-    request =
-      Task.async(fn ->
-        Freddy.RPC.Client.request(rpc_client, routing_key, %{})
-      end)
+    alias Freddy.Exchange
 
-    assert {:ok, result} = Task.yield(request, 100)
-    assert {:error, :timeout} == result
+    @config [
+      exchange: [name: "freddy-rpc-test-exchange", type: :direct],
+      queue: [opts: [auto_delete: true]],
+      routing_keys: ["server"]
+    ]
 
-    assert ^initial_state = TestClient.get_state(rpc_client)
+    def start_link(conn, pid) do
+      Freddy.Consumer.start_link(__MODULE__, conn, @config, pid)
+    end
+
+    def handle_ready(_meta, pid) do
+      send(pid, :server_ready)
+      {:noreply, pid}
+    end
+
+    def handle_message(%{"action" => "timeout"}, _meta, pid) do
+      {:reply, :ack, pid}
+    end
+
+    def handle_message(payload, meta, pid) do
+      reply(meta, payload)
+      {:reply, :ack, pid}
+    end
+
+    defp reply(%{reply_to: reply_queue, correlation_id: correlation_id, channel: channel}, payload) do
+      exchange = Exchange.default()
+      encoded = Jason.encode!(payload)
+      opts = [correlation_id: correlation_id, type: "response", content_type: "application/json"]
+      Exchange.publish(exchange, channel, encoded, reply_queue, opts)
+    end
   end
 
-  test "returns `{:error, :no_route}` on return", %{conn: conn} do
-    rpc_client = start_client(conn, [])
-    routing_key = "TestQueue"
-    initial_state = TestClient.get_state(rpc_client)
+  # we're dealing with real RabbitMQ instance which may add latency
+  @assert_receive_interval 500
 
-    request =
-      Task.async(fn ->
-        Freddy.RPC.Client.request(rpc_client, routing_key, %{})
-      end)
+  setup context do
+    connection = context[:connection]
+    client_opts = context[:client_options] || []
 
-    assert_receive {:before_request, %{options: [correlation_id: correlation_id]}}
+    {:ok, client} = TestClient.start_link(connection, self(), client_opts)
+    context = Map.put(context, :client, client)
 
-    send(rpc_client, {:return, "", %{correlation_id: correlation_id}})
-    assert {:error, :no_route} = Task.await(request)
+    context =
+      if context[:server] do
+        assert_receive :init
+        assert_receive :connected, @assert_receive_interval
+        assert_receive {:ready, _}, @assert_receive_interval
 
-    assert ^initial_state = TestClient.get_state(rpc_client)
+        {:ok, server} = TestServer.start_link(connection, self())
+        assert_receive :server_ready
+
+        Map.put(context, :server, server)
+      else
+        context
+      end
+
+    {:ok, context}
   end
 
-  defp start_client(conn, config) do
-    {:ok, rpc_client} = TestClient.start_link(conn, config, self())
-
-    # Emulate RabbitMQ confirmation
-    send(rpc_client, {:consume_ok, %{}})
-
-    rpc_client
+  test "init/1 is called when the process starts" do
+    assert_receive :init
   end
 
-  defp assert_options_injected(options) do
-    assert options[:mandatory]
-    assert options[:content_type] == "application/json"
-    assert Keyword.has_key?(options, :expiration)
-    assert Keyword.has_key?(options, :reply_to)
-    assert Keyword.has_key?(options, :correlation_id)
-
-    Map.new(options)
+  test "handle_connected/1 is called after init/1" do
+    assert_receive :init
+    assert_receive :connected, @assert_receive_interval
   end
 
-  defp respond_to(rpc_client, payload, meta) do
-    send(rpc_client, {:deliver, Poison.encode!(payload), meta})
+  test "handle_ready/2 is called when client is ready to consume response messages" do
+    assert_receive :init
+    assert_receive :connected, @assert_receive_interval
+    assert_receive {:ready, "amq.gen-" <> _random_name}, @assert_receive_interval
+  end
+
+  test "before_request/2 can reply early", %{client: client} do
+    assert_receive {:ready, _}, @assert_receive_interval
+
+    assert TestClient.request(
+             client,
+             "_routing_key",
+             "_payload",
+             on_before_action: {:reply, :early_response}
+           ) == :early_response
+  end
+
+  @tag server: true
+  test "before_request/2 can modify the request", %{client: client} do
+    response_payload = %{success: true, response: "new_payload"}
+
+    assert {:ok, %{"response" => "new_payload"}} =
+             TestClient.request(
+               client,
+               "server",
+               "_payload",
+               on_before_action: {:change, response_payload}
+             )
+  end
+
+  @tag server: true
+  test "on_response/2 can change a response", %{client: client} do
+    payload = %{success: true, response: "payload"}
+    changed_response = :new_response
+
+    assert TestClient.request(
+             client,
+             "server",
+             payload,
+             on_response_action: {:reply, changed_response}
+           ) == changed_response
+  end
+
+  @tag server: true
+  test "on_return/2 returns {:error, :no_route} by default", %{client: client} do
+    assert {:error, :no_route} = TestClient.request(client, "unknown_route", "_payload")
+  end
+
+  @tag server: true
+  test "on_return/2 reply is configurable", %{client: client} do
+    assert :response =
+             TestClient.request(
+               client,
+               "unknown_route",
+               "_payload",
+               on_return_action: {:reply, :response}
+             )
+  end
+
+  @tag server: true, client_options: [timeout: 100]
+  test "on_timeout/2 returns {:error, :timeout} by default", %{client: client} do
+    assert {:error, :timeout} = TestClient.request(client, "server", %{action: :timeout})
+  end
+
+  @tag server: true, client_options: [timeout: 100]
+  test "on_timeout/2 reply is configurable", %{client: client} do
+    assert :response =
+             TestClient.request(
+               client,
+               "server",
+               %{action: :timeout},
+               on_timeout_action: {:reply, :response}
+             )
+  end
+
+  test "handle_call/3 is called on Freddy.RPC.Client.call", %{client: client} do
+    assert :response = Freddy.RPC.Client.call(client, :call)
+  end
+
+  test "handle_cast/2 is called on Freddy.RPC.Client.cast", %{client: client} do
+    assert :ok = Freddy.RPC.Client.cast(client, :cast)
+    # synchronize with client
+    _ = :sys.get_state(client)
+    assert_receive :cast
+  end
+
+  test "handle_info/2 is called on other messages", %{client: client} do
+    send(client, :info)
+    # synchronize with client
+    _ = :sys.get_state(client)
+    assert_receive :info
+  end
+
+  test "terminate/2 is called when the process stops", %{client: client} do
+    Freddy.RPC.Client.stop(client, :normal)
+    assert_receive {:terminate, :normal}
+  end
+
+  @tag server: true
+  test "handle_disconnected/2 callback is called when connection is disrupted", %{
+    connection: connection
+  } do
+    assert {:ok, conn} = Freddy.Connection.get_connection(connection)
+
+    ref = Process.monitor(conn.pid)
+    Process.exit(conn.pid, {:shutdown, {:server_initiated_close, 320, 'Good bye'}})
+    assert_receive {:DOWN, ^ref, :process, _, _}
+
+    assert_receive {:disconnected, :shutdown}
+    refute_receive :init, @assert_receive_interval
+    assert_receive {:ready, _}, @assert_receive_interval
+  end
+
+  @tag server: true
+  test "returns {:ok, output} when server responds with %{success: true, output: result}", %{
+    client: client
+  } do
+    payload = %{success: true, output: "payload"}
+    assert {:ok, "payload"} = TestClient.request(client, "server", payload)
+  end
+
+  @tag server: true
+  test "returns {:ok, payload} when server responds with %{success: true, ...payload}", %{
+    client: client
+  } do
+    payload = %{success: true, result: "payload"}
+    assert {:ok, %{"result" => "payload"}} = TestClient.request(client, "server", payload)
+  end
+
+  @tag server: true
+  test "returns {:error, :invalid_request, error} when server responds with %{success: false, error: error}",
+       %{client: client} do
+    payload = %{success: false, error: "error"}
+    assert {:error, :invalid_request, "error"} = TestClient.request(client, "server", payload)
+  end
+
+  @tag server: true
+  test "returns {:error, :invalid_request, payload} when server responds with %{success: false, ...payload}",
+       %{client: client} do
+    payload = %{success: false, result: "error"}
+
+    assert {:error, :invalid_request, %{"result" => "error"}} =
+             TestClient.request(client, "server", payload)
   end
 end

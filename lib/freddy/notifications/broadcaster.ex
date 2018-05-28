@@ -29,7 +29,7 @@ defmodule Freddy.Notifications.Broadcaster do
   Arguments:
 
     * `mod` - the module that defines the server callbacks (like GenServer)
-    * `conn` - the pid of a `Hare.Core.Conn` process
+    * `conn` - the pid of a `Freddy.Connection` process
     * `initial` - the value that will be given to `init/1`
     * `opts` - the GenServer options
   """

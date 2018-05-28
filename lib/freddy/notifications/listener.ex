@@ -1,6 +1,6 @@
 defmodule Freddy.Notifications.Listener do
   @moduledoc """
-  Freddy.Consumer special case. Listens for notifications from "freddy-topic" exchange.
+  `Freddy.Consumer` special case. Listens for notifications from "freddy-topic" exchange.
 
   Like in `Freddy.Consumer`, you have to specify routing keys to bind to.
 
@@ -36,12 +36,10 @@ defmodule Freddy.Notifications.Listener do
   @type connection :: Freddy.Consumer.connection()
   @type options :: GenServer.options()
   @type config :: [
-          queue: Hare.Context.Action.DeclareQueue.config(),
+          queue: Keyword.t(),
           routing_keys: [String.t()],
           binds: [Keyword.t()]
         ]
-
-  @compile {:inline, stop: 1, stop: 2}
 
   @doc """
   Start a `Freddy.Notifications.Listener` process linked to the current process.
@@ -49,7 +47,7 @@ defmodule Freddy.Notifications.Listener do
   Arguments:
 
     * `mod` - the module that defines the server callbacks (like GenServer)
-    * `connection` - the pid of a `Hare.Core.Conn` process
+    * `connection` - the pid of a `Freddy.Connection` process
     * `config` - the configuration of the listener
     * `initial` - the value that will be given to `init/1`
     * `opts` - the GenServer options

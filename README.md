@@ -25,10 +25,10 @@ The package can be installed as:
 
   1. Create Freddy connection:
   ```elixir
-  {:ok, conn} = Freddy.Conn.start_link()
+  {:ok, conn} = Freddy.Connection.start_link()
   ```
     
-  2. Create RPC Client:
+  2. Create an RPC Client:
   ```elixir
   defmodule AMQPService do
     use Freddy.RPC.Client
@@ -55,8 +55,8 @@ The package can be installed as:
       import Supervisor.Spec
   
       children = [
-        worker(Freddy.Conn, [[], [name: Freddy.Conn]]),
-        worker(AMQPService, [Freddy.Conn, nil, [name: AMQPService]])
+        worker(Freddy.Connection, [[], [name: Freddy.Connection]]),
+        worker(AMQPService, [Freddy.Connection, nil, [name: AMQPService]])
       ]
   
       opts = [strategy: :one_for_one, name: MyApp.Supervisor]
