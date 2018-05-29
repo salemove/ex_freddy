@@ -37,7 +37,7 @@ defmodule Freddy.Consumer do
       end
   """
 
-  use Freddy.Actor, queue: nil, exchange: nil, consumer_tag: nil
+  use Freddy.Actor, queue: nil, exchange: nil
 
   @type routing_key :: String.t()
   @type action :: :ack | :nack | :reject
@@ -203,8 +203,8 @@ defmodule Freddy.Consumer do
   @impl true
   def handle_connected(channel, state(config: config) = state) do
     case declare_subscription(config, channel) do
-      {:ok, queue, exchange, consumer_tag} ->
-        super(channel, state(state, queue: queue, exchange: exchange, consumer_tag: consumer_tag))
+      {:ok, queue, exchange} ->
+        super(channel, state(state, queue: queue, exchange: exchange))
 
       {:error, :closed} ->
         {:error, state}
@@ -248,24 +248,24 @@ defmodule Freddy.Consumer do
          {:ok, queue} <- Queue.declare(queue, channel),
          :ok <- QoS.declare(qos, channel),
          :ok <- Bind.declare_multiple(binds, exchange, queue, channel),
-         {:ok, consumer_tag} <- Queue.consume(queue, self(), channel, consumer_opts) do
-      {:ok, queue, exchange, consumer_tag}
+         {:ok, _consumer_tag} <- Queue.consume(queue, self(), channel, consumer_opts) do
+      {:ok, queue, exchange}
     end
   end
 
   @impl true
-  def handle_info(message, state(consumer_tag: consumer_tag) = state) do
+  def handle_info(message,state) do
     case message do
-      {:basic_consume_ok, %{consumer_tag: ^consumer_tag} = meta} ->
+      {:basic_consume_ok, meta} ->
         handle_mod_ready(meta, state)
 
-      {:basic_deliver, payload, %{consumer_tag: ^consumer_tag} = meta} ->
+      {:basic_deliver, payload, meta} ->
         handle_delivery(payload, meta, state)
 
-      {:basic_cancel, %{consumer_tag: ^consumer_tag}} ->
+      {:basic_cancel, _meta} ->
         {:stop, :canceled, state}
 
-      {:basic_cancel_ok, %{consumer_tag: ^consumer_tag}} ->
+      {:basic_cancel_ok, _meta} ->
         {:stop, {:shutdown, :canceled}, state}
 
       message ->
