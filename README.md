@@ -1,6 +1,6 @@
 # Freddy
 
-RPC protocol over RabbitMQ. **In development stage**.
+RPC protocol over RabbitMQ. **In development stage, minor versions prior to 1.0 may include breaking changes**.
 
 [![Build Status](https://travis-ci.org/salemove/ex_freddy.svg?branch=master)](https://travis-ci.org/salemove/ex_freddy)
 
