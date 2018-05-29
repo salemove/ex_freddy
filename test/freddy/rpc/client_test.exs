@@ -290,6 +290,23 @@ defmodule Freddy.RPC.ClientTest do
   end
 
   @tag server: true
+  test "process stops if client can't declare an exchange due to permanent error", %{
+    connection: connection
+  } do
+    {:ok, pid} =
+      Freddy.RPC.Client.start(
+        TestClient,
+        connection,
+        [exchange: [name: "amq.direct", type: :topic]],
+        self()
+      )
+
+    ref = Process.monitor(pid)
+
+    assert_receive {:DOWN, ^ref, :process, ^pid, :exchange_error}
+  end
+
+  @tag server: true
   test "returns {:ok, output} when server responds with %{success: true, output: result}", %{
     client: client
   } do

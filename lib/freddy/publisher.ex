@@ -185,6 +185,7 @@ defmodule Freddy.Publisher do
   def handle_connected(channel, state(config: config) = state) do
     case declare_exchange(config, channel) do
       {:ok, exchange} -> super(channel, state(state, exchange: exchange))
+      {:error, :closed} -> {:error, state}
       {:error, reason} -> {:stop, reason, state}
     end
   end

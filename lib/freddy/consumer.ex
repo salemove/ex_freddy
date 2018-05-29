@@ -206,8 +206,11 @@ defmodule Freddy.Consumer do
       {:ok, queue, exchange, consumer_tag} ->
         super(channel, state(state, queue: queue, exchange: exchange, consumer_tag: consumer_tag))
 
-      {:error, _reason} ->
+      {:error, :closed} ->
         {:error, state}
+
+      {:error, reason} ->
+        {:stop, reason, state}
     end
   end
 

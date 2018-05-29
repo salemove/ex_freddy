@@ -454,11 +454,26 @@ defmodule Freddy.RPC.Client do
           GenServer.on_start()
           | no_return()
   def start_link(mod, conn, config, initial, opts \\ []) do
-    timeout = Keyword.get(config, :timeout, @default_timeout)
-    exchange = Keyword.get(config, :exchange, [])
-    config = Keyword.put(@config, :exchange, exchange)
+    Freddy.Consumer.start_link(
+      __MODULE__,
+      conn,
+      prepare_config(config),
+      prepare_init_args(mod, config, initial),
+      opts
+    )
+  end
 
-    Freddy.Consumer.start_link(__MODULE__, conn, config, {mod, timeout, initial}, opts)
+  @doc """
+  Starts a `Freddy.RPC.Client` process without linking to the current process
+  """
+  def start(mod, conn, config, initial, opts \\ []) do
+    Freddy.Consumer.start(
+      __MODULE__,
+      conn,
+      prepare_config(config),
+      prepare_init_args(mod, config, initial),
+      opts
+    )
   end
 
   defdelegate call(client, message, timeout \\ 5000), to: Connection
@@ -474,6 +489,16 @@ defmodule Freddy.RPC.Client do
           | {:error, reason :: term, hint :: term}
   def request(client, routing_key, payload, opts \\ []) do
     Freddy.Consumer.call(client, {:"$request", payload, routing_key, opts}, @gen_server_timeout)
+  end
+
+  defp prepare_config(config) do
+    exchange = Keyword.get(config, :exchange, [])
+    Keyword.put(@config, :exchange, exchange)
+  end
+
+  defp prepare_init_args(mod, config, initial) do
+    timeout = Keyword.get(config, :timeout, @default_timeout)
+    {mod, timeout, initial}
   end
 
   @impl true

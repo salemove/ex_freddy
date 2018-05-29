@@ -150,7 +150,7 @@ defmodule Freddy.Actor do
       defrecordp :state, unquote(state_keys)
 
       @doc """
-      Start a `Freddy.Consumer` process linked to the current process.
+      Start a `#{__MODULE__}` process linked to the current process.
 
       Arguments:
 
@@ -164,6 +164,15 @@ defmodule Freddy.Actor do
               GenServer.on_start()
       def start_link(mod, connection, config, initial, opts \\ []) do
         Freddy.Actor.start_link(__MODULE__, connection, {mod, config, initial}, opts)
+      end
+
+      @doc """
+      Start a `#{__MODULE__}` process without linking to the current process.
+
+      See `start_link/5` for more information.
+      """
+      def start(mod, connection, config, initial, opts \\ []) do
+        Freddy.Actor.start(__MODULE__, connection, {mod, config, initial}, opts)
       end
 
       defdelegate call(consumer, message, timeout \\ 5000), to: Connection
@@ -269,6 +278,11 @@ defmodule Freddy.Actor do
   @doc false
   def start_link(mod, connection, initial, opts \\ []) do
     Connection.start_link(__MODULE__, {mod, connection, initial}, opts)
+  end
+
+  @doc false
+  def start(mod, connection, initial, opts \\ []) do
+    Connection.start(__MODULE__, {mod, connection, initial}, opts)
   end
 
   @impl true

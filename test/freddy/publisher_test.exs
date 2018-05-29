@@ -186,4 +186,21 @@ defmodule Freddy.PublisherTest do
     Freddy.Publisher.stop(publisher, :normal)
     assert_receive {:terminate, :normal}
   end
+
+  @tag server: true
+  test "process stops if publisher can't declare an exchange due to permanent error", %{
+    connection: connection
+  } do
+    {:ok, pid} =
+      Freddy.Publisher.start(
+        TestPublisher,
+        connection,
+        [exchange: [name: "amq.direct", type: :topic]],
+        self()
+      )
+
+    ref = Process.monitor(pid)
+
+    assert_receive {:DOWN, ^ref, :process, ^pid, :exchange_error}
+  end
 end
