@@ -57,12 +57,16 @@ defmodule Freddy.RPC.Client do
   Returning `{:noreply, state}` will cause the process to enter the main loop
   with the given state.
 
+  Returning `{:error, state}` will cause the process to reconnect (i.e. open
+  new channel, declare exchange and queue, etc).
+
   Returning `{:stop, reason, state}` will terminate the main loop and call
   `terminate(reason, state)` before the process exits with reason `reason`.
   """
   @callback handle_connected(state) ::
               {:noreply, state}
               | {:noreply, state, timeout | :hibernate}
+              | {:error, state}
               | {:stop, reason :: term, state}
 
   @doc """
@@ -495,6 +499,9 @@ defmodule Freddy.RPC.Client do
       {:noreply, new_given, timeout} ->
         {:noreply, state(state, given: new_given), timeout}
 
+      {:error, new_given} ->
+        {:noreply, state(state, given: new_given)}
+
       {:stop, reason, new_given} ->
         {:stop, reason, state(state, given: new_given)}
     end
@@ -638,6 +645,10 @@ defmodule Freddy.RPC.Client do
   end
 
   # Private functions
+
+  defp handle_request(_payload, _routing_key, _opts, _from, state(channel: nil) = state) do
+    {:reply, {:error, :not_connected}, state}
+  end
 
   defp handle_request(payload, routing_key, opts, from, state(mod: mod, given: given) = state) do
     request = Request.start(from, payload, routing_key, opts)

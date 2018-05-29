@@ -280,6 +280,15 @@ defmodule Freddy.RPC.ClientTest do
     assert_receive {:ready, _}, @assert_receive_interval
   end
 
+  test "request/5 returns {:error, :not_connected} when client is in disconnected state", %{
+    connection: connection,
+    client: client
+  } do
+    Freddy.Connection.close(connection)
+    assert_receive {:disconnected, _}
+    assert {:error, :not_connected} = TestClient.request(client, "_server", "_payload")
+  end
+
   @tag server: true
   test "returns {:ok, output} when server responds with %{success: true, output: result}", %{
     client: client

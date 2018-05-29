@@ -14,17 +14,7 @@ defmodule Freddy.Exchange do
   See `AMQP.Exchange.declare/4` for more information.
   """
 
-  @type t :: %__MODULE__{}
-
-  defstruct name: "", type: :direct, opts: []
-
-  def new(%__MODULE__{} = exchange) do
-    exchange
-  end
-
-  def new(config) when is_list(config) do
-    struct!(__MODULE__, config)
-  end
+  use Freddy.AMQP, name: "", type: :direct, opts: []
 
   def default do
     %__MODULE__{}
@@ -36,12 +26,8 @@ defmodule Freddy.Exchange do
   end
 
   def declare(%__MODULE__{} = exchange, channel) do
-    try do
+    safe_amqp(on_error: {:error, :exchange_error}) do
       AMQP.Exchange.declare(channel, exchange.name, exchange.type, exchange.opts)
-    rescue
-      MatchError ->
-        # amqp 0.x throws MatchError when server responds with non-OK
-        {:error, :exchange_error}
     end
   end
 

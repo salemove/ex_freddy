@@ -13,6 +13,7 @@ defmodule Freddy.Actor do
   @callback handle_connected(channel :: AMQP.Channel.t(), state) ::
               {:noreply, state}
               | {:noreply, state, timeout | :hibernate}
+              | {:error, state}
               | {:stop, reason, state}
 
   @callback handle_disconnected(reason, state) ::
@@ -78,12 +79,16 @@ defmodule Freddy.Actor do
       Returning `{:noreply, state}` will cause the process to enter the main loop
       with the given state.
 
+      Returning `{:error, state}` will indicate that process failed to perform some critical actions
+      and must reconnect.
+
       Returning `{:stop, reason, state}` will terminate the main loop and call
       `terminate(reason, state)` before the process exits with reason `reason`.
       """
       @callback handle_connected(state) ::
                   {:noreply, state}
                   | {:noreply, state, timeout | :hibernate}
+                  | {:error, state}
                   | {:stop, reason :: term, state}
 
       @doc """
@@ -182,6 +187,9 @@ defmodule Freddy.Actor do
           {:noreply, new_given, timeout} ->
             {:noreply, state(state, given: new_given, channel: channel), timeout}
 
+          {:error, new_given} ->
+            {:error, state(state, given: new_given)}
+
           {:stop, reason, new_given} ->
             {:stop, reason, state(state, given: new_given)}
         end
@@ -269,7 +277,7 @@ defmodule Freddy.Actor do
       {:ok, given} ->
         ref = Process.monitor(connection)
 
-        {:connect, :init,
+        {:connect, :connect,
          %{
            mod: mod,
            connection: connection,
@@ -288,7 +296,7 @@ defmodule Freddy.Actor do
   end
 
   @impl true
-  def connect(_, %{connection: connection} = state) do
+  def connect(_info, %{connection: connection} = state) do
     case Freddy.Connection.open_channel(connection) do
       {:ok, channel} ->
         ref = Process.monitor(channel.pid)
@@ -385,8 +393,21 @@ defmodule Freddy.Actor do
       {:noreply, new_given, timeout} ->
         {:ok, %{state | given: new_given}, timeout}
 
+      {:error, new_given} ->
+        close_channel(channel)
+
+        {:backoff, 0, %{state | channel: nil, given: new_given}}
+
       {:stop, reason, new_given} ->
         {:stop, reason, %{state | given: new_given}}
+    end
+  end
+
+  defp close_channel(channel) do
+    try do
+      AMQP.Channel.close(channel)
+    catch
+      :exit, {:noproc, _} -> :ok
     end
   end
 end

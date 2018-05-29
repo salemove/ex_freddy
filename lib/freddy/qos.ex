@@ -3,15 +3,7 @@ defmodule Freddy.QoS do
   Channel QoS configuration
   """
 
-  defstruct prefetch_count: 0, prefetch_size: 0, global: false
-
-  def new(%__MODULE__{} = qos) do
-    qos
-  end
-
-  def new(config) when is_list(config) do
-    struct!(__MODULE__, config)
-  end
+  use Freddy.AMQP, prefetch_count: 0, prefetch_size: 0, global: false
 
   def default do
     %__MODULE__{}
@@ -23,11 +15,8 @@ defmodule Freddy.QoS do
       |> Map.from_struct()
       |> Keyword.new()
 
-    try do
+    safe_amqp(on_error: {:error, :qos_error}) do
       AMQP.Basic.qos(channel, opts)
-    rescue
-      MatchError ->
-        {:error, :qos_error}
     end
   end
 end

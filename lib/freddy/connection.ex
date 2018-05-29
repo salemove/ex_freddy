@@ -91,7 +91,13 @@ defmodule Freddy.Connection do
   def disconnect(info, state(connection: connection) = state) do
     case info do
       {:close, from} ->
-        result = AMQP.Connection.close(connection)
+        result =
+          try do
+            AMQP.Connection.close(connection)
+          catch
+            :exit, {:noproc, _} -> :closed
+          end
+
         Connection.reply(from, result)
 
       _other ->
