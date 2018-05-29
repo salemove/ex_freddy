@@ -3,6 +3,8 @@ defmodule Freddy.Connection do
   Stable AMQP connection.
   """
 
+  alias Freddy.Utils.MultikeyMap
+
   @type connection :: GenServer.server()
 
   # Hard coded for now, can make configurable later
@@ -22,9 +24,9 @@ defmodule Freddy.Connection do
   @doc """
   Closes an AMQP connection. This will cause process to reconnect.
   """
-  @spec close(connection) :: :ok | {:error, reason :: term}
-  def close(connection) do
-    Connection.call(connection, :close)
+  @spec close(connection, timeout) :: :ok | {:error, reason :: term}
+  def close(connection, timeout \\ 5000) do
+    Connection.call(connection, {:close, timeout})
   end
 
   @doc """
@@ -66,7 +68,7 @@ defmodule Freddy.Connection do
   defrecordp :state,
     opts: nil,
     connection: nil,
-    channels: %{}
+    channels: MultikeyMap.new()
 
   @impl true
   def init(opts) do
@@ -88,22 +90,7 @@ defmodule Freddy.Connection do
   end
 
   @impl true
-  def disconnect(info, state(connection: connection) = state) do
-    case info do
-      {:close, from} ->
-        result =
-          try do
-            AMQP.Connection.close(connection)
-          catch
-            :exit, {:noproc, _} -> :closed
-          end
-
-        Connection.reply(from, result)
-
-      _other ->
-        :ok
-    end
-
+  def disconnect(_info, state) do
     {:connect, :reconnect, state(state, connection: nil)}
   end
 
@@ -126,11 +113,7 @@ defmodule Freddy.Connection do
         {:ok, chan} ->
           monitor_ref = Process.monitor(from)
           channel_ref = Process.monitor(chan.pid)
-
-          channels =
-            channels
-            |> Map.put(monitor_ref, {chan, channel_ref})
-            |> Map.put(channel_ref, monitor_ref)
+          channels = MultikeyMap.put(channels, [monitor_ref, channel_ref], chan)
 
           {:reply, {:ok, chan}, state(state, channels: channels)}
 
@@ -151,8 +134,8 @@ defmodule Freddy.Connection do
     end
   end
 
-  def handle_call(:close, from, state) do
-    {:disconnect, {:close, from}, state}
+  def handle_call({:close, timeout}, _from, state(connection: connection) = state) do
+    {:disconnect, :close, close_connection(connection, timeout), state}
   end
 
   @impl true
@@ -174,8 +157,12 @@ defmodule Freddy.Connection do
     {:noreply, state}
   end
 
-  def handle_info({:DOWN, monitor_ref, _, _pid, _reason}, state) do
-    {:noreply, close_channel(monitor_ref, state)}
+  def handle_info({:EXIT, _process, reason}, state) do
+    {:stop, reason, state}
+  end
+
+  def handle_info({:DOWN, ref, _, _pid, _reason}, state) do
+    {:noreply, close_channel(ref, state)}
   end
 
   def handle_info(_info, state) do
@@ -189,34 +176,37 @@ defmodule Freddy.Connection do
     end
   end
 
-  defp close_channel(channel_or_monitor_ref, state(channels: channels) = state) do
-    case Map.get(channels, channel_or_monitor_ref) do
-      {channel, channel_ref} ->
-        close_channel(channel, channel_ref, channel_or_monitor_ref, state)
-
-      monitor_ref when is_reference(monitor_ref) ->
-        close_channel(monitor_ref, state)
-
-      nil ->
+  defp close_channel(ref, state(channels: channels) = state) do
+    case MultikeyMap.pop(channels, ref) do
+      {nil, ^channels} ->
         state
+
+      {channel, new_channels} ->
+        try do
+          AMQP.Channel.close(channel)
+        catch
+          _, _ -> :ok
+        end
+
+        state(state, channels: new_channels)
     end
   end
 
-  defp close_channel(channel, channel_ref, monitor_ref, state(channels: channels) = state) do
-    Process.demonitor(channel_ref)
-    Process.demonitor(monitor_ref)
-
+  defp close_connection(%{pid: pid} = connection, timeout) do
     try do
-      AMQP.Channel.close(channel)
+      AMQP.Connection.close(connection)
+
+      receive do
+        {:EXIT, ^pid, _reason} -> :ok
+      after timeout ->
+        Process.exit(pid, :kill)
+
+        receive do
+          {:EXIT, ^pid, _reason} -> :ok
+        end
+      end
     catch
-      _, _ -> :ok
+      :exit, {:noproc, _} -> {:error, :closed}
     end
-
-    channels =
-      channels
-      |> Map.delete(monitor_ref)
-      |> Map.delete(channel_ref)
-
-    state(state, channels: channels)
   end
 end

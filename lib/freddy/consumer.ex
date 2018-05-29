@@ -254,7 +254,7 @@ defmodule Freddy.Consumer do
   end
 
   @impl true
-  def handle_info(message,state) do
+  def handle_info(message, state) do
     case message do
       {:basic_consume_ok, meta} ->
         handle_mod_ready(meta, state)
