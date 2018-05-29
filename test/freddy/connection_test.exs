@@ -65,4 +65,14 @@ defmodule Freddy.ConnectionTest do
     send(child, :stop)
     assert_receive {:DOWN, ^ref, :process, _, :normal}
   end
+
+  test "process can be stopped by Process.exit" do
+    {:ok, pid} = Connection.start_link()
+
+    Process.unlink(pid)
+    ref = Process.monitor(pid)
+    Process.exit(pid, :restart)
+
+    assert_receive {:DOWN, ^ref, :process, ^pid, :restart}
+  end
 end

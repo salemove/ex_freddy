@@ -125,7 +125,13 @@ defmodule Freddy.Connection do
       case AMQP.Channel.open(connection) do
         {:ok, chan} ->
           monitor_ref = Process.monitor(from)
-          channels = Map.put(channels, monitor_ref, chan)
+          channel_ref = Process.monitor(chan.pid)
+
+          channels =
+            channels
+            |> Map.put(monitor_ref, {chan, channel_ref})
+            |> Map.put(channel_ref, monitor_ref)
+
           {:reply, {:ok, chan}, state(state, channels: channels)}
 
         # amqp 1.0 format
@@ -168,23 +174,8 @@ defmodule Freddy.Connection do
     {:noreply, state}
   end
 
-  def handle_info({:DOWN, monitor_ref, :process, _pid, _reason}, state(channels: channels) = state) do
-    state =
-      case Map.get(channels, monitor_ref) do
-        nil ->
-          state
-
-        chan ->
-          try do
-            :ok = AMQP.Channel.close(chan)
-          catch
-            _, _ -> :ok
-          end
-
-          state(state, channels: Map.delete(channels, monitor_ref))
-      end
-
-    {:noreply, state}
+  def handle_info({:DOWN, monitor_ref, _, _pid, _reason}, state) do
+    {:noreply, close_channel(monitor_ref, state)}
   end
 
   def handle_info(_info, state) do
@@ -196,5 +187,36 @@ defmodule Freddy.Connection do
     if connection do
       AMQP.Connection.close(connection)
     end
+  end
+
+  defp close_channel(channel_or_monitor_ref, state(channels: channels) = state) do
+    case Map.get(channels, channel_or_monitor_ref) do
+      {channel, channel_ref} ->
+        close_channel(channel, channel_ref, channel_or_monitor_ref, state)
+
+      monitor_ref when is_reference(monitor_ref) ->
+        close_channel(monitor_ref, state)
+
+      nil ->
+        state
+    end
+  end
+
+  defp close_channel(channel, channel_ref, monitor_ref, state(channels: channels) = state) do
+    Process.demonitor(channel_ref)
+    Process.demonitor(monitor_ref)
+
+    try do
+      AMQP.Channel.close(channel)
+    catch
+      _, _ -> :ok
+    end
+
+    channels =
+      channels
+      |> Map.delete(monitor_ref)
+      |> Map.delete(channel_ref)
+
+    state(state, channels: channels)
   end
 end
