@@ -2,7 +2,7 @@ defmodule Freddy.Notifications.Broadcaster do
   @moduledoc """
   `Freddy.Publisher` special case.
 
-  This module allows to publish messages to `freddy-topic` exchange.
+  This module allows to publish messages to `"freddy-topic"` exchange.
 
   See documentation for `Freddy.Publisher`.
   """
@@ -24,14 +24,14 @@ defmodule Freddy.Notifications.Broadcaster do
   @doc """
   Starts a `Freddy.Broadcaster` process linked to the current process.
 
-  The process will be started by calling `init` with the given initial value.
+  The process will be started by calling `init/1` with the given initial value.
 
   Arguments:
 
-    * `mod` - the module that defines the server callbacks (like GenServer)
-    * `conn` - the pid of a `Hare.Core.Conn` process
+    * `mod` - the module that defines the server callbacks (like `GenServer`)
+    * `conn` - the pid of a `Freddy.Connection` process
     * `initial` - the value that will be given to `init/1`
-    * `opts` - the GenServer options
+    * `opts` - the `GenServer` options
   """
   @spec start_link(module, GenServer.server(), initial :: term, GenServer.options()) ::
           GenServer.on_start()
@@ -40,7 +40,7 @@ defmodule Freddy.Notifications.Broadcaster do
   end
 
   @doc """
-  Publish message with the given `routing_key` and `payload` to "freddy-topic" exchange.
+  Publish message with the given `routing_key` and `payload` to `"freddy-topic"` exchange.
   The message will be encoded to JSON before publication.
 
   Arguments:

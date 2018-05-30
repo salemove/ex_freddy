@@ -2,7 +2,41 @@ defmodule Freddy.Consumer do
   @moduledoc """
   This module allows to consume messages from specified queue bound to specified exchange.
 
-  Example:
+  ## Configuration
+
+    * `:exchange` - specifies an exchange to declare. See `Freddy.Exchange` for available
+      options. Optional.
+    * `:queue` - specifies a queue to declare. See `Freddy.Queue` for available options.
+      Mandatory.
+    * `:qos` - configures channel QoS. See `Freddy.QoS` for available options.
+    * `:binds` - specifies bindings to create from the declared queue to the declared
+      exchange. Must be a list of keywords or `%Freddy.Bind{}` structs. See `Freddy.Bind`
+      for available options.
+    * `:routing_keys` - a short way to declare bindings, for example providing a list
+      `["key1", "key2"]` is an equivalent of specifying option
+      `[binds: [[routing_key: "key1"], [routing_key: "key2"]]]`.
+    * `:consumer` - arguments to provide to `basic.consume` method, see below.
+
+  ## Consumer options
+
+    * `:consumer_tag` - Specifies the identifier for the consumer. The consumer tag is
+      local to a channel, so two clients can use the same consumer tags. If this field
+      is empty the server will generate a unique tag. Default is empty.
+    * `:no_local` - If the `:no_local` field is set the server will not send messages
+      to the connection that published them. Default is `false`.
+    * `:no_ack` - If this field is set the server does not expect acknowledgements for
+      messages. That is, when a message is delivered to the client the server assumes
+      the delivery will succeed and immediately dequeues it. This functionality may
+      increase performance but at the cost of reliability. Messages can get lost if a
+      client dies before they are delivered to the application. Defaults to `false`.
+    * `:exclusive` - Request exclusive consumer access, meaning only this consumer can
+      access the queue. Default is `false`.
+    * `:nowait` - If set, the server will not respond to the method and client
+      will not wait for a reply. Default is `false`.
+    * `:arguments` - A set of arguments for the consume. The syntax and semantics
+      of these arguments depends on the server implementation.
+
+  ## Example
 
       defmodule Notifications.Listener do
         use Freddy.Consumer
@@ -15,7 +49,8 @@ defmodule Freddy.Consumer do
             routing_keys: ["routing_key1", "routing_key2"], # short way to declare binds
             binds: [ # fully customizable bindings
               [routing_key: "routing_key3", no_wait: true]
-            ]
+            ],
+            consumer: [exclusive: true] # optional
           ]
           Freddy.Consumer.start_link(__MODULE__, conn, config, initial, opts)
         end
@@ -36,47 +71,11 @@ defmodule Freddy.Consumer do
       end
   """
 
-  @type payload :: term
-  @type meta :: map
+  use Freddy.Actor, queue: nil, exchange: nil
+
+  @type routing_key :: String.t()
   @type action :: :ack | :nack | :reject
-  @type state :: term
   @type error :: term
-
-  @doc """
-  Called when the consumer process is first started.
-
-  Returning `{:ok, state}` will cause `start_link/3` to return `{:ok, pid}` and attempt to
-  open a channel on the given connection and declare the queue, the exchange, and the bindings
-  to the specified routing keys.
-
-  After that it will enter the main loop with `state` as its internal state.
-
-  Returning `:ignore` will cause `start_link/3` to return `:ignore` and the
-  process will exit normally without entering the loop, opening a channel or calling
-  `terminate/2`.
-
-  Returning `{:stop, reason}` will cause `start_link/3` to return `{:error, reason}` and
-  the process will exit with reason `reason` without entering the loop, opening a channel,
-  or calling `terminate/2`.
-  """
-  @callback init(state) ::
-              {:ok, state}
-              | :ignore
-              | {:stop, reason :: term}
-
-  @doc """
-  Called when the consumer process has opened AMQP channel before registering
-  itself as a consumer in AMQP broker.
-
-  Returning `{:noreply, state}` will cause the process to enter the main loop
-  with the given state.
-
-  Returning `{:stop, reason, state}` will terminate the main loop and call
-  `terminate(reason, state)` before the process exits with reason `reason`.
-  """
-  @callback handle_connected(state) ::
-              {:noreply, state}
-              | {:stop, reason :: term, state}
 
   @doc """
   Called when the AMQP server has registered the process as a consumer and it
@@ -90,20 +89,36 @@ defmodule Freddy.Consumer do
   """
   @callback handle_ready(meta, state) ::
               {:noreply, state}
+              | {:noreply, state, timeout | :hibernate}
               | {:stop, reason :: term, state}
 
   @doc """
-  Called when the AMQP consumer has been disconnected from the AMQP broker.
+  Called when a message is delivered from the queue before passing it into a
+  `handle_message` function.
 
-  Returning `{:noreply, state}` causes the process to enter the main loop with
-  the given state. The process will not consume any new messages until connection
-  to AMQP broker is established again.
+  The arguments are the message's raw payload, some metatdata and the internal state.
+  The metadata is a map containing all metadata given by the AMQP client when receiving
+  the message plus the `:exchange` and `:queue` values.
+
+  Returning `{:ok, payload, state}` or `{:ok, payload, meta, state}` will pass the decoded
+  payload and meta into `handle_message/3` function.
+
+  Returning `{:reply, action, opts, state}` or `{:reply, action, state}` will immediately ack,
+  nack or reject the message.
+
+  Returning `{:noreply, state}` will do nothing, and therefore the message should
+  be acknowledged by using `Freddy.Consumer.ack/2`, `Freddy.Consumer.nack/2` or
+  `Freddy.Consumer.reject/2`.
 
   Returning `{:stop, reason, state}` will terminate the main loop and call
   `terminate(reason, state)` before the process exits with reason `reason`.
   """
-  @callback handle_disconnected(reason :: term, state) ::
-              {:noreply, state}
+  @callback decode_message(payload :: String.t(), meta, state) ::
+              {:ok, payload, state}
+              | {:ok, payload, meta, state}
+              | {:reply, action, opts :: Keyword.t(), state}
+              | {:reply, action, state}
+              | {:noreply, state}
               | {:stop, reason :: term, state}
 
   @doc """
@@ -131,74 +146,8 @@ defmodule Freddy.Consumer do
               {:reply, action, state}
               | {:reply, action, opts :: Keyword.t(), state}
               | {:noreply, state}
-              | {:stop, reason :: term, state}
-
-  @doc """
-  Called when a message cannot be decoded or when an error occurred during message processing.
-
-  The arguments are the error, the message's original payload, some metadata and the internal state.
-  The metadata is a map containing all metadata given by the adapter when receiving
-  the message plus the `:exchange` and `:queue` values received at the `connect/2`
-  callback.
-
-  Returning `{:reply, :ack | :nack | :reject, state}` will ack, nack or reject
-  the message.
-
-  Returning `{:reply, :ack | :nack | :reject, opts, state}` will ack, nack or reject
-  the message with the given opts.
-
-  Returning `{:noreply, state}` will do nothing, and therefore the message should
-  be acknowledged by using `Freddy.Consumer.ack/2`, `Freddy.Consumer.nack/2` or
-  `Freddy.Consumer.reject/2`.
-
-  Returning `{:stop, reason, state}` will terminate the main loop and call
-  `terminate(reason, state)` before the process exits with reason `reason`.
-  """
-  @callback handle_error(error, payload, meta, state) ::
-              {:reply, action, state}
-              | {:reply, action, opts :: Keyword.t(), state}
-              | {:noreply, state}
-              | {:stop, reason :: term, state}
-
-  @doc """
-  Called when the process receives a call message sent by `call/3`. This
-  callback has the same arguments as the `GenServer` equivalent and the
-  `:reply`, `:noreply` and `:stop` return tuples behave the same.
-  """
-  @callback handle_call(request :: term, GenServer.from(), state) ::
-              {:reply, reply :: term, state}
-              | {:reply, reply :: term, state, timeout | :hibernate}
-              | {:noreply, state}
               | {:noreply, state, timeout | :hibernate}
               | {:stop, reason :: term, state}
-              | {:stop, reason :: term, reply :: term, state}
-
-  @doc """
-  Called when the process receives a cast message sent by `cast/3`. This
-  callback has the same arguments as the `GenServer` equivalent and the
-  `:noreply` and `:stop` return tuples behave the same.
-  """
-  @callback handle_cast(request :: term, state) ::
-              {:noreply, state}
-              | {:noreply, state, timeout | :hibernate}
-              | {:stop, reason :: term, state}
-
-  @doc """
-  Called when the process receives a message. This callback has the same
-  arguments as the `GenServer` equivalent and the `:noreply` and `:stop`
-  return tuples behave the same.
-  """
-  @callback handle_info(term, state) ::
-              {:noreply, state}
-              | {:noreply, state, timeout | :hibernate}
-              | {:stop, reason :: term, state}
-
-  @doc """
-  This callback is the same as the `GenServer` equivalent and is called when the
-  process terminates. The first argument is the reason the process is about
-  to exit with.
-  """
-  @callback terminate(reason :: term, state) :: any
 
   defmacro __using__(_) do
     quote location: :keep do
@@ -206,243 +155,212 @@ defmodule Freddy.Consumer do
 
       # Default callback implementation
 
-      @doc false
-      def init(initial),
-        do: {:ok, initial}
+      @impl true
+      def init(initial) do
+        {:ok, initial}
+      end
 
-      @doc false
-      def handle_connected(state),
-        do: {:noreply, state}
+      @impl true
+      def handle_connected(state) do
+        {:noreply, state}
+      end
 
-      @doc false
-      def handle_ready(_meta, state),
-        do: {:noreply, state}
+      @impl true
+      def handle_ready(_meta, state) do
+        {:noreply, state}
+      end
 
-      @doc false
-      def handle_disconnected(_reason, state),
-        do: {:noreply, state}
+      @impl true
+      def handle_disconnected(_reason, state) do
+        {:noreply, state}
+      end
 
-      @doc false
-      def handle_message(_message, _meta, state),
-        do: {:reply, :ack, state}
+      @impl true
+      def decode_message(payload, _meta, state) do
+        case Jason.decode(payload) do
+          {:ok, new_payload} -> {:ok, new_payload, state}
+          {:error, reason} -> {:reply, :reject, [requeue: false], state}
+        end
+      end
 
-      @doc false
-      def handle_error(_error, _payload, _meta, state),
-        do: {:reply, :reject, state}
+      @impl true
+      def handle_message(_message, _meta, state) do
+        {:reply, :ack, state}
+      end
 
-      @doc false
-      def handle_call(message, _from, state),
-        do: {:stop, {:bad_call, message}, state}
+      @impl true
+      def handle_call(message, _from, state) do
+        {:stop, {:bad_call, message}, state}
+      end
 
-      @doc false
-      def handle_cast(message, state),
-        do: {:stop, {:bad_cast, message}, state}
+      @impl true
+      def handle_cast(message, state) do
+        {:stop, {:bad_cast, message}, state}
+      end
 
-      @doc false
-      def handle_info(_message, state),
-        do: {:noreply, state}
+      @impl true
+      def handle_info(_message, state) do
+        {:noreply, state}
+      end
 
-      @doc false
+      @impl true
       def terminate(_reason, _state),
         do: :ok
 
-      defoverridable init: 1,
-                     handle_connected: 1,
-                     handle_ready: 2,
-                     handle_disconnected: 2,
-                     handle_message: 3,
-                     handle_error: 4,
-                     handle_cast: 2,
-                     handle_call: 3,
-                     handle_info: 2,
-                     terminate: 2
+      defoverridable Freddy.Consumer
     end
   end
 
-  use Hare.Consumer
+  alias Freddy.Exchange
+  alias Freddy.Queue
+  alias Freddy.QoS
+  alias Freddy.Bind
 
-  @type config :: [
-          queue: Hare.Context.Action.DeclareQueue.config(),
-          exchange: Hare.Context.Action.DeclareExchange.config(),
-          qos: Hare.Context.Action.Qos.config(),
-          routing_keys: [String.t()],
-          binds: [Keyword.t()]
-        ]
+  @doc "Ack's a message given its meta"
+  @spec ack(meta :: map, opts :: Keyword.t()) :: :ok
+  def ack(%{channel: channel, delivery_tag: delivery_tag} = _meta, opts \\ []) do
+    AMQP.Basic.ack(channel, delivery_tag, opts)
+  end
 
-  @type connection :: GenServer.server()
+  @doc "Nack's a message given its meta"
+  @spec nack(meta :: map, opts :: Keyword.t()) :: :ok
+  def nack(%{channel: channel, delivery_tag: delivery_tag} = _meta, opts \\ []) do
+    AMQP.Basic.nack(channel, delivery_tag, opts)
+  end
 
-  @compile {:inline, start_link: 4, start_link: 5, stop: 1, stop: 2}
+  @doc "Rejects a message given its meta"
+  @spec reject(meta :: map, opts :: Keyword.t()) :: :ok
+  def reject(%{channel: channel, delivery_tag: delivery_tag} = _meta, opts \\ []) do
+    AMQP.Basic.reject(channel, delivery_tag, opts)
+  end
 
-  @doc """
-  Start a `Freddy.Consumer` process linked to the current process.
+  @impl true
+  def handle_connected(channel, state(config: config) = state) do
+    case declare_subscription(config, channel) do
+      {:ok, queue, exchange} ->
+        super(channel, state(state, queue: queue, exchange: exchange))
 
-  Arguments:
+      {:error, :closed} ->
+        {:error, state}
 
-    * `mod` - the module that defines the server callbacks (like GenServer)
-    * `connection` - the pid of a `Hare.Core.Conn` process
-    * `config` - the configuration of the consumer
-    * `initial` - the value that will be given to `init/1`
-    * `opts` - the GenServer options
-  """
-  @spec start_link(module, connection, config, initial :: term, GenServer.options()) ::
-          GenServer.on_start()
-  def start_link(mod, connection, config, initial, opts \\ []),
-    do:
-      Hare.Consumer.start_link(
-        __MODULE__,
-        connection,
-        build_consumer_config(config),
-        {mod, initial},
-        opts
-      )
-
-  defdelegate call(consumer, message, timeout \\ 5000), to: Hare.Consumer
-  defdelegate cast(consumer, message), to: Hare.Consumer
-  defdelegate stop(consumer, reason \\ :normal), to: GenServer
-  defdelegate ack(meta, opts \\ []), to: Hare.Consumer
-  defdelegate nack(meta, opts \\ []), to: Hare.Consumer
-  defdelegate reject(meta, opts \\ []), to: Hare.Consumer
-
-  # Hare.Consumer callbacks implementation
-
-  @doc false
-  def init({mod, initial}) do
-    case mod.init(initial) do
-      {:ok, state} -> {:ok, {mod, nil, state}}
-      :ignore -> :ignore
-      {:stop, reason} -> {:stop, reason}
+      {:error, reason} ->
+        {:stop, reason, state}
     end
   end
 
-  @doc false
-  def handle_connected({mod, queue, state}) do
-    case mod.handle_connected(state) do
-      {:noreply, new_state} ->
-        {:noreply, {mod, queue, new_state}}
+  defp declare_subscription(config, channel) do
+    exchange =
+      config
+      |> Keyword.get(:exchange, Exchange.default())
+      |> Exchange.new()
 
-      {:stop, reason, new_state} ->
-        {:stop, reason, {mod, queue, new_state}}
-    end
-  end
+    queue =
+      config
+      |> Keyword.fetch!(:queue)
+      |> Queue.new()
 
-  @doc false
-  def handle_ready(%{queue: queue} = meta, {mod, _, state}) do
-    case mod.handle_ready(meta, state) do
-      {:noreply, new_state} -> {:noreply, {mod, queue, new_state}}
-      {:stop, reason, new_state} -> {:stop, reason, {mod, queue, new_state}}
-    end
-  end
-
-  @doc false
-  def handle_disconnected(reason, {mod, queue, state}) do
-    case mod.handle_disconnected(reason, state) do
-      {:noreply, new_state} ->
-        {:noreply, {mod, queue, new_state}}
-
-      {:stop, reason, new_state} ->
-        {:stop, reason, {mod, queue, new_state}}
-    end
-  end
-
-  @doc false
-  def handle_message(payload, meta, {mod, _queue, state}) do
-    case Poison.decode(payload) do
-      {:ok, decoded} -> handle_mod_message(decoded, meta, mod, state)
-      error -> handle_mod_error(error, payload, meta, mod, state)
-    end
-  end
-
-  @doc false
-  def handle_call(message, from, {mod, queue, state}) do
-    case mod.handle_call(message, from, state) do
-      {:reply, reply, new_state} -> {:reply, reply, {mod, queue, new_state}}
-      {:reply, reply, new_state, timeout} -> {:reply, reply, {mod, queue, new_state}, timeout}
-      {:noreply, new_state} -> {:noreply, {mod, queue, new_state}}
-      {:noreply, new_state, timeout} -> {:noreply, {mod, queue, new_state}, timeout}
-      {:stop, reason, new_state} -> {:stop, reason, {mod, queue, new_state}}
-      {:stop, reason, reply, new_state} -> {:stop, reason, reply, {mod, queue, new_state}}
-    end
-  end
-
-  @doc false
-  def handle_cast(message, state) do
-    handle_mod_async(message, :handle_cast, state)
-  end
-
-  @doc false
-  def handle_info(message, state) do
-    handle_mod_async(message, :handle_info, state)
-  end
-
-  @doc false
-  def terminate(reason, {mod, _queue, state}),
-    do: mod.terminate(reason, state)
-
-  defp handle_mod_message(message, %{queue: queue} = meta, mod, state) do
-    message
-    |> mod.handle_message(meta, state)
-    |> handle_mod_response(mod, queue)
-  end
-
-  defp handle_mod_error(error, payload, %{queue: queue} = meta, mod, state) do
-    error
-    |> mod.handle_error(payload, meta, state)
-    |> handle_mod_response(mod, queue)
-  end
-
-  @reply_actions [:ack, :nack, :reject]
-
-  defp handle_mod_response(response, mod, queue) do
-    case response do
-      {:reply, action, state} when action in @reply_actions ->
-        {:reply, action, {mod, queue, state}}
-
-      {:reply, action, options, state} when action in @reply_actions ->
-        {:reply, action, options, {mod, queue, state}}
-
-      {:noreply, state} ->
-        {:noreply, {mod, queue, state}}
-
-      {:noreply, state, timeout} ->
-        {:noreply, {mod, queue, state}, timeout}
-
-      {:stop, reason, state} ->
-        {:stop, reason, {mod, queue, state}}
-    end
-  end
-
-  defp handle_mod_async(message, fun, {mod, queue, state}) do
-    case apply(mod, fun, [message, state]) do
-      {:noreply, new_state} ->
-        {:noreply, {mod, queue, new_state}}
-
-      {:noreply, new_state, timeout} ->
-        {:noreply, {mod, queue, new_state}, timeout}
-
-      {:stop, reason, new_state} ->
-        {:stop, reason, {mod, queue, new_state}}
-    end
-  end
-
-  defp build_consumer_config(config) do
-    queue = Keyword.fetch!(config, :queue)
-    exchange = Keyword.fetch!(config, :exchange)
-    qos = Keyword.get(config, :qos)
+    qos =
+      config
+      |> Keyword.get(:qos, QoS.default())
+      |> QoS.new()
 
     routing_keys =
       config
       |> Keyword.get(:routing_keys, [])
-      |> Enum.map(&{:bind, [routing_key: &1]})
+      |> Enum.map(&Bind.new(routing_key: &1))
 
     custom_binds =
       config
       |> Keyword.get(:binds, [])
-      |> Enum.map(&{:bind, &1})
+      |> Enum.map(&Bind.new/1)
 
-    [
-      queue: queue,
-      exchange: exchange,
-      qos: qos
-    ] ++ routing_keys ++ custom_binds
+    binds = routing_keys ++ custom_binds
+
+    consumer_opts = Keyword.get(config, :consumer, [])
+
+    with :ok <- Exchange.declare(exchange, channel),
+         {:ok, queue} <- Queue.declare(queue, channel),
+         :ok <- QoS.declare(qos, channel),
+         :ok <- Bind.declare_multiple(binds, exchange, queue, channel),
+         {:ok, _consumer_tag} <- Queue.consume(queue, self(), channel, consumer_opts) do
+      {:ok, queue, exchange}
+    end
+  end
+
+  @impl true
+  def handle_info(message, state) do
+    case message do
+      {:basic_consume_ok, meta} ->
+        handle_mod_ready(meta, state)
+
+      {:basic_deliver, payload, meta} ->
+        handle_delivery(payload, meta, state)
+
+      {:basic_cancel, _meta} ->
+        {:stop, :canceled, state}
+
+      {:basic_cancel_ok, _meta} ->
+        {:stop, {:shutdown, :canceled}, state}
+
+      message ->
+        super(message, state)
+    end
+  end
+
+  defp handle_mod_ready(meta, state(mod: mod, given: given) = state) do
+    case mod.handle_ready(complete(meta, state), given) do
+      {:noreply, new_given} ->
+        {:noreply, state(state, given: new_given)}
+
+      {:noreply, new_given, timeout} ->
+        {:noreply, state(state, given: new_given), timeout}
+
+      {:stop, reason, new_given} ->
+        {:stop, reason, state(state, given: new_given)}
+    end
+  end
+
+  @reply_actions [:ack, :nack, :reject]
+
+  defp handle_delivery(payload, meta, state(mod: mod, given: given) = state) do
+    meta = complete(meta, state)
+
+    result =
+      case mod.decode_message(payload, meta, given) do
+        {:ok, new_payload, new_given} ->
+          mod.handle_message(new_payload, meta, new_given)
+
+        {:ok, new_payload, new_meta, new_given} ->
+          mod.handle_message(new_payload, new_meta, new_given)
+
+        other ->
+          other
+      end
+
+    case result do
+      {:reply, action, new_given} when action in @reply_actions ->
+        apply(__MODULE__, action, [meta])
+        {:noreply, state(state, given: new_given)}
+
+      {:reply, action, opts, new_given} when action in @reply_actions ->
+        apply(__MODULE__, action, [meta, opts])
+        {:noreply, state(state, given: new_given)}
+
+      {:noreply, new_given} ->
+        {:noreply, state(state, given: new_given)}
+
+      {:noreply, new_given, timeout} ->
+        {:noreply, state(state, given: new_given), timeout}
+
+      {:stop, reason, new_given} ->
+        {:stop, reason, state(state, given: new_given)}
+    end
+  end
+
+  defp complete(meta, state(channel: channel, queue: queue, exchange: exchange)) do
+    meta
+    |> Map.put(:exchange, exchange)
+    |> Map.put(:queue, queue)
+    |> Map.put(:channel, channel)
   end
 end
