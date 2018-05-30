@@ -26,10 +26,30 @@ defmodule Freddy.QoS do
 
   ## Example
 
-    iex> %Freddy.QoS{prefetch_count: 10}
+      iex> %Freddy.QoS{prefetch_count: 10}
   """
 
-  use Freddy.AMQP, prefetch_count: 0, prefetch_size: 0, global: false
+  @type t :: %__MODULE__{
+          prefetch_count: non_neg_integer,
+          prefetch_size: non_neg_integer,
+          global: boolean
+        }
+
+  defstruct prefetch_count: 0, prefetch_size: 0, global: false
+
+  import Freddy.Utils.SafeAMQP
+
+  @doc """
+  Create QoS configuration from keyword list or `Freddy.QoS` structure.
+  """
+  @spec new(t | Keyword.t()) :: t
+  def new(%__MODULE__{} = qos) do
+    qos
+  end
+
+  def new(config) when is_list(config) do
+    struct!(__MODULE__, config)
+  end
 
   @doc """
   Returns default configuration for QoS
@@ -40,6 +60,7 @@ defmodule Freddy.QoS do
   end
 
   @doc false
+  @spec declare(t, AMQP.Channel.t()) :: :ok | {:error, reason :: term}
   def declare(%__MODULE__{} = qos, channel) do
     opts =
       qos

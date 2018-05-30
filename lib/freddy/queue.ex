@@ -23,14 +23,42 @@ defmodule Freddy.Queue do
 
   ### Server-named queue
 
-    iex> %Freddy.Queue{exclusive: true, auto_delete: true}
+      iex> %Freddy.Queue{exclusive: true, auto_delete: true}
 
   ### Client-named queue
 
-    iex> %Freddy.Queue{name: "notifications", durable: true}
+      iex> %Freddy.Queue{name: "notifications", durable: true}
   """
 
-  use Freddy.AMQP, name: "", opts: []
+  @type t :: %__MODULE__{
+          name: String.t(),
+          opts: options
+        }
+
+  @type options :: [
+          durable: boolean,
+          auto_delete: boolean,
+          exclusive: boolean,
+          passive: boolean,
+          nowait: boolean,
+          arguments: Keyword.t()
+        ]
+
+  defstruct name: "", opts: []
+
+  import Freddy.Utils.SafeAMQP
+
+  @doc """
+  Create queue configuration from keyword list or `Freddy.Queue` structure.
+  """
+  @spec new(t | Keyword.t()) :: t
+  def new(%__MODULE__{} = queue) do
+    queue
+  end
+
+  def new(config) when is_list(config) do
+    struct!(__MODULE__, config)
+  end
 
   @doc false
   @spec declare(t, AMQP.Channel.t()) :: {:ok, t} | {:error, atom}

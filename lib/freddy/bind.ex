@@ -18,10 +18,30 @@ defmodule Freddy.Bind do
       iex> %Freddy.Bind{routing_key: "a_key"}
   """
 
-  use Freddy.AMQP, routing_key: "#", nowait: false, arguments: []
+  @type t :: %__MODULE__{
+          routing_key: String.t(),
+          nowait: boolean,
+          arguments: Keyword.t()
+        }
+
+  defstruct routing_key: "#", nowait: false, arguments: []
 
   alias Freddy.Queue
   alias Freddy.Exchange
+
+  import Freddy.Utils.SafeAMQP
+
+  @doc """
+  Create binding configuration from keyword list or `Freddy.Bind` structure.
+  """
+  @spec new(t | Keyword.t()) :: t
+  def new(%__MODULE__{} = bind) do
+    bind
+  end
+
+  def new(config) when is_list(config) do
+    struct!(__MODULE__, config)
+  end
 
   @doc false
   # Binds given `queue_or_exchange` to the given `exchange`.

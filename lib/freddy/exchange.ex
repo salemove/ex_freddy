@@ -26,10 +26,39 @@ defmodule Freddy.Exchange do
 
   ## Example
 
-    iex> %Freddy.Exchange{name: "freddy-topic", type: :topic, durable: true}
+      iex> %Freddy.Exchange{name: "freddy-topic", type: :topic, durable: true}
   """
 
-  use Freddy.AMQP, name: "", type: :direct, opts: []
+  @type t :: %__MODULE__{
+          name: String.t(),
+          type: atom | String.t(),
+          opts: options
+        }
+
+  @type options :: [
+          durable: boolean,
+          auto_delete: boolean,
+          passive: boolean,
+          internal: boolean,
+          nowait: boolean,
+          arguments: Keyword.t()
+        ]
+
+  defstruct name: "", type: :direct, opts: []
+
+  import Freddy.Utils.SafeAMQP
+
+  @doc """
+  Create exchange configuration from keyword list or `Freddy.Exchange` structure.
+  """
+  @spec new(t | Keyword.t()) :: t
+  def new(%__MODULE__{} = exchange) do
+    exchange
+  end
+
+  def new(config) when is_list(config) do
+    struct!(__MODULE__, config)
+  end
 
   @doc """
   Returns default exchange configuration. Such exchange implicitly exists in RabbitMQ
