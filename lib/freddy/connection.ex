@@ -198,12 +198,13 @@ defmodule Freddy.Connection do
 
       receive do
         {:EXIT, ^pid, _reason} -> :ok
-      after timeout ->
-        Process.exit(pid, :kill)
+      after
+        timeout ->
+          Process.exit(pid, :kill)
 
-        receive do
-          {:EXIT, ^pid, _reason} -> :ok
-        end
+          receive do
+            {:EXIT, ^pid, _reason} -> :ok
+          end
       end
     catch
       :exit, {:noproc, _} -> {:error, :closed}

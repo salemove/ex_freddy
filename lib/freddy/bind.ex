@@ -1,16 +1,30 @@
 defmodule Freddy.Bind do
   @moduledoc """
   Queue-Exchange or Exchange-Exchange binding configiration
+
+  ## Options
+
+    * `:routing_key` - Specifies the routing key for the binding. The routing
+      key is used for routing messages depending on the exchange configuration.
+      Not all exchanges use a routing key - refer to the specific exchange
+      documentation. Default is `"#"`.
+    * `:nowait` - If set, the server will not respond to the method and client
+      will not wait for a reply. Default is `false`.
+    * `:arguments` - A set of arguments for the binding. The syntax and semantics
+      of these arguments depends on the exchange class.
+
+  ## Example
+
+      iex> %Freddy.Bind{routing_key: "a_key"}
   """
 
-  use Freddy.AMQP, routing_key: nil, nowait: false, arguments: []
+  use Freddy.AMQP, routing_key: "#", nowait: false, arguments: []
 
   alias Freddy.Queue
   alias Freddy.Exchange
 
-  @doc """
-  Binds given `queue_or_exchange` to the given `exchange`.
-  """
+  @doc false
+  # Binds given `queue_or_exchange` to the given `exchange`.
   @spec declare(t, Exchange.t(), Exchange.t() | Queue.t(), AMQP.Channel.t()) :: :ok | {:error, atom}
   def declare(bind, exchange, queue_or_exchange, channel)
 
@@ -30,6 +44,7 @@ defmodule Freddy.Bind do
     end
   end
 
+  @doc false
   @spec declare_multiple([t], Exchange.t(), Exchange.t() | Queue.t(), AMQP.Channel.t()) ::
           :ok | {:error, atom}
   def declare_multiple(binds, exchange, queue_or_exchange, channel) do

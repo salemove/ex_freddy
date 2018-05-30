@@ -1,10 +1,10 @@
 defmodule Freddy.Notifications.Listener do
   @moduledoc """
-  `Freddy.Consumer` special case. Listens for notifications from "freddy-topic" exchange.
+  `Freddy.Consumer` special case. Listens for notifications from `"freddy-topic"` exchange.
 
-  Like in `Freddy.Consumer`, you have to specify routing keys to bind to.
+  Like in `Freddy.Consumer`, you have to specify queue and routing keys to bind to.
 
-  Example:
+  ## Example
 
       defmodule Notifications.Listener do
         use Freddy.Notifications.Listener
@@ -46,11 +46,11 @@ defmodule Freddy.Notifications.Listener do
 
   Arguments:
 
-    * `mod` - the module that defines the server callbacks (like GenServer)
+    * `mod` - the module that defines the server callbacks (like `GenServer`)
     * `connection` - the pid of a `Freddy.Connection` process
     * `config` - the configuration of the listener
     * `initial` - the value that will be given to `init/1`
-    * `opts` - the GenServer options
+    * `opts` - the `GenServer` options
   """
   @spec start_link(module, connection, config, initial :: term, options) :: GenServer.on_start()
   def start_link(mod, conn, config, initial, opts \\ []) do

@@ -40,7 +40,7 @@ defmodule Freddy.RPC.ClientTest do
     @impl true
     def before_request(request, pid) do
       case Request.get_option(request, :on_before_action) do
-        {:change, new_payload} -> {:ok, Request.update_payload(request, new_payload), pid}
+        {:change, new_payload} -> {:ok, Request.set_payload(request, new_payload), pid}
         {:reply, response} -> {:reply, response, pid}
         _other -> super(request, pid)
       end

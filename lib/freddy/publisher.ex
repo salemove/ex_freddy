@@ -1,22 +1,22 @@
 defmodule Freddy.Publisher do
   @moduledoc """
-  A behaviour module for implementing Freddy-compliant AMQP publisher processes.
+  A behaviour module for implementing AMQP publisher processes.
 
-  The `Freddy.Publisher` module provides a way to create processes that hold,
-  monitor, and restart a channel in case of failure, exports a function to publish
+  The `Freddy.Publisher` module provides a way to create processes that holds,
+  monitors, and restarts a channel in case of failure, exports a function to publish
   messages to an exchange, and some callbacks to hook into the process lifecycle.
 
   An example `Freddy.Publisher` process that only sends every other message:
 
       defmodule MyPublisher do
-        use #{__MODULE__}
+        use Freddy.Publisher
 
         def start_link(conn, config, opts \\ []) do
-          #{__MODULE__}.start_link(__MODULE__, conn, config, :ok, opts)
+          Freddy.Publisher.start_link(__MODULE__, conn, config, :ok, opts)
         end
 
         def publish(publisher, payload, routing_key) do
-          #{__MODULE__}.publish(publisher, payload, routing_key)
+          Freddy.Publisher.publish(publisher, payload, routing_key)
         end
 
         def init(:ok) do
@@ -33,8 +33,8 @@ defmodule Freddy.Publisher do
 
   ## Channel handling
 
-  When the `#{__MODULE__}` starts with `start_link/5` it runs the `init/1` callback
-  and responds with `{:ok, pid}` on success, like a GenServer.
+  When the `Freddy.Publisher` starts with `start_link/5` it runs the `init/1` callback
+  and responds with `{:ok, pid}` on success, like a `GenServer`.
 
   After starting the process it attempts to open a channel on the given connection.
   It monitors the channel, and in case of failure it tries to reopen again and again
@@ -44,12 +44,13 @@ defmodule Freddy.Publisher do
 
   The context setup process for a publisher is to declare its exchange.
 
-  Every time a channel is open the context is set up, meaning that the exchange
+  Every time a channel is opened the context is set up, meaning that the exchange
   is declared through the new channel based on the given configuration.
 
   The configuration must be a `Keyword.t` that contains a single key: `:exchange`
   whose value is the configuration for the `Freddy.Exchange`.
-  Check it for more detailed information.
+
+  Check `Freddy.Exchange` for more detailed information.
   """
 
   use Freddy.Actor, exchange: nil

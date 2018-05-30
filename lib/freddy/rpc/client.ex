@@ -2,7 +2,7 @@ defmodule Freddy.RPC.Client do
   @moduledoc ~S"""
   This module allows to build RPC client for any Freddy-compliant microservice.
 
-  Example:
+  ## Example
 
       defmodule PaymentsService do
         use Freddy.RPC.Client
@@ -39,11 +39,11 @@ defmodule Freddy.RPC.Client do
 
   Returning `:ignore` will cause `start_link/5` to return `:ignore` and the
   process will exit normally without entering the loop, opening a channel or calling
-  `terminate/2`.
+  `c:terminate/2`.
 
   Returning `{:stop, reason}` will cause `start_link/5` to return `{:error, reason}` and
   the process will exit with reason `reason` without entering the loop, opening a channel,
-  or calling `terminate/2`.
+  or calling `c:terminate/2`.
   """
   @callback init(initial :: term) ::
               {:ok, state}
@@ -61,7 +61,7 @@ defmodule Freddy.RPC.Client do
   new channel, declare exchange and queue, etc).
 
   Returning `{:stop, reason, state}` will terminate the main loop and call
-  `terminate(reason, state)` before the process exits with reason `reason`.
+  `c:terminate/2` before the process exits with reason `reason`.
   """
   @callback handle_connected(state) ::
               {:noreply, state}
@@ -76,8 +76,8 @@ defmodule Freddy.RPC.Client do
   Returning `{:noreply, state}` will causes the process to enter the main loop
   with the given state.
 
-  Returning `{:stop, reason, state}` will not send the message, terminate the
-  main loop and call `terminate(reason, state)` before the process exits with
+  Returning `{:stop, reason, state}` will not send the message, terminate
+  the main loop and call `c:terminate/2` before the process exits with
   reason `reason`.
   """
   @callback handle_ready(meta, state) ::
@@ -93,7 +93,7 @@ defmodule Freddy.RPC.Client do
   connection to AMQP broker is restored.
 
   Returning `{:stop, reason, state}` will terminate the main loop and call
-  `terminate(reason, state)` before the process exits with reason `reason`.
+  `c:terminate/2` before the process exits with reason `reason`.
   """
   @callback handle_disconnected(reason :: term, state) ::
               {:noreply, state}
@@ -110,12 +110,8 @@ defmodule Freddy.RPC.Client do
   modification, block the client until the response is received, and enter
   the main loop with the given state.
 
-  Returning `{:ok, request, state}` will do the same as `{:ok, state}`, but
-  returned `meta` will be given as a 2nd argument in `on_response/3` and
-  as a 1st argument in `on_timeout/3` callback.
-
   Returning `{:ok, request, state}` will cause the payload, routing key and
-  options from the given `request` to be used instead or the original ones,
+  options from the given `request` to be used instead of the original ones,
   block the client until the response is received, and enter the main loop
   with the given state.
 
@@ -124,12 +120,11 @@ defmodule Freddy.RPC.Client do
   loop again with the given state.
 
   Returning `{:stop, reason, response, state}` will not send the message,
-  respond to the caller with `response`, and terminate the main loop
-  and call `terminate(reason, state)` before the process exits with
-  reason `reason`.
+  respond to the caller with `response`, terminate the main loop
+  and call `c:terminate/2` before the process exits with reason `reason`.
 
-  Returning `{:stop, reason, state}` will not send the message, terminate the
-  main loop and call `terminate(reason, state)` before the process exits with
+  Returning `{:stop, reason, state}` will not send the message, terminate
+  the main loop and call `c:terminate/2` before the process exits with
   reason `reason`.
   """
   @callback before_request(request, state) ::
@@ -154,11 +149,10 @@ defmodule Freddy.RPC.Client do
 
   Returning `{:stop, reason, response, state}` will not send the message,
   respond to the caller with `response`, and terminate the main loop
-  and call `terminate(reason, state)` before the process exits with
-  reason `reason`.
+  and call `c:terminate/2` before the process exits with reason `reason`.
 
-  Returning `{:stop, reason, state}` will not send the message, terminate the
-  main loop and call `terminate(reason, state)` before the process exits with
+  Returning `{:stop, reason, state}` will not send the message, terminate
+  the main loop and call `c:terminate/2` before the process exits with
   reason `reason`.
   """
   @callback encode_request(request, state) ::
@@ -186,7 +180,7 @@ defmodule Freddy.RPC.Client do
   `Freddy.Consumer.reject/2`.
 
   Returning `{:stop, reason, state}` will terminate the main loop and call
-  `terminate(reason, state)` before the process exits with reason `reason`.
+  `c:terminate/2` before the process exits with reason `reason`.
   """
   @callback decode_response(payload :: String.t(), meta, request, state) ::
               {:ok, payload, state}
@@ -211,11 +205,11 @@ defmodule Freddy.RPC.Client do
   forever if the timeout was set to `:infinity`).
 
   Returning `{:stop, reason, reply, state}` will deliver the given reply to
-  the caller instead of the original response and call `terminate(reason, state)`
+  the caller instead of the original response and call `c:terminate/2`
   before the process exits with reason `reason`.
 
   Returning `{:stop, reason, state}` not reply to the caller and call
-  `terminate(reason, state)` before the process exits with reason `reason`.
+  `c:terminate/2` before the process exits with reason `reason`.
   """
   @callback on_response(response, request, state) ::
               {:reply, response, state}
@@ -236,11 +230,11 @@ defmodule Freddy.RPC.Client do
   forever if the timeout was set to `:infinity`).
 
   Returning `{:stop, reason, reply, state}` will deliver the given reply to
-  the caller, and call `terminate(reason, state)` before the process exits
+  the caller, and call `c:terminate/2` before the process exits
   with reason `reason`.
 
   Returning `{:stop, reason, state}` will not reply to the caller and call
-  `terminate(reason, state)` before the process exits with reason `reason`.
+  `c:terminate/2` before the process exits with reason `reason`.
   """
   @callback on_timeout(request, state) ::
               {:reply, response, state}
@@ -261,11 +255,11 @@ defmodule Freddy.RPC.Client do
   forever if the timeout was set to `:infinity`).
 
   Returning `{:stop, reason, reply, state}` will deliver the given reply to
-  the caller, and call `terminate(reason, state)` before the process exits
+  the caller, and call `c:terminate/2` before the process exits
   with reason `reason`.
 
   Returning `{:stop, reason, state}` will not reply to the caller and call
-  `terminate(reason, state)` before the process exits with reason `reason`.
+  `c:terminate/2` before the process exits with reason `reason`.
   """
   @callback on_return(request, state) ::
               {:reply, response, state}
@@ -289,7 +283,7 @@ defmodule Freddy.RPC.Client do
               | {:stop, reason :: term, reply :: term, state}
 
   @doc """
-  Called when the process receives a cast message sent by `cast/3`. This
+  Called when the process receives a cast message sent by `cast/2`. This
   callback has the same arguments as the `GenServer` equivalent and the
   `:noreply` and `:stop` return tuples behave the same.
   """
@@ -350,7 +344,7 @@ defmodule Freddy.RPC.Client do
           {:ok, new_payload} ->
             new_request =
               request
-              |> Freddy.RPC.Request.update_payload(new_payload)
+              |> Freddy.RPC.Request.set_payload(new_payload)
               |> Freddy.RPC.Request.put_option(:content_type, "application/json")
 
             {:ok, new_request, state}
@@ -439,20 +433,19 @@ defmodule Freddy.RPC.Client do
   Starts a `Freddy.RPC.Client` process linked to the current process.
 
   This function is used to start a `Freddy.RPC.Client` process in a supervision
-  tree. The process will be started by calling `init` with the given initial
+  tree. The process will be started by calling `c:init/1` with the given initial
   value.
 
   Arguments:
 
-    * `mod` - the module that defines the server callbacks (like GenServer)
+    * `mod` - the module that defines the server callbacks (like `GenServer`)
     * `conn` - the pid of a `Freddy.Connection` process
-    * `config` - the configuration of the RPC Client (describing the exchange, routing_key and timeout value)
-    * `initial` - the value that will be given to `init/1`
-    * `opts` - the GenServer options
+    * `config` - the configuration of the RPC Client (describing the exchange and timeout value)
+    * `initial` - the value that will be given to `c:init/1`
+    * `opts` - the `GenServer` options
   """
   @spec start_link(module, GenServer.server(), config, initial :: term, GenServer.options()) ::
           GenServer.on_start()
-          | no_return()
   def start_link(mod, conn, config, initial, opts \\ []) do
     Freddy.Consumer.start_link(
       __MODULE__,
@@ -464,8 +457,11 @@ defmodule Freddy.RPC.Client do
   end
 
   @doc """
-  Starts a `Freddy.RPC.Client` process without linking to the current process
+  Starts a `Freddy.RPC.Client` process without linking to the current process,
+  see `start_link/5` for more information.
   """
+  @spec start(module, GenServer.server(), config, initial :: term, GenServer.options()) ::
+          GenServer.on_start()
   def start(mod, conn, config, initial, opts \\ []) do
     Freddy.Consumer.start(
       __MODULE__,

@@ -52,7 +52,7 @@ defmodule Freddy.Actor do
       @type connection :: GenServer.server()
 
       @doc """
-      Called when the `#{__MODULE__}` process is first started.
+      Called when the `#{Macro.to_string(__MODULE__)}` process is first started.
 
       Returning `{:ok, state}` will cause `start_link/3` to return `{:ok, pid}` and attempt to
       open a channel on the given connection and initialize an actor (it depends on the actor's
@@ -62,11 +62,11 @@ defmodule Freddy.Actor do
 
       Returning `:ignore` will cause `start_link/3` to return `:ignore` and the
       process will exit normally without entering the loop, opening a channel or calling
-      `terminate/2`.
+      `c:terminate/2`.
 
       Returning `{:stop, reason}` will cause `start_link/3` to return `{:error, reason}` and
       the process will exit with reason `reason` without entering the loop, opening a channel,
-      or calling `terminate/2`.
+      or calling `c:terminate/2`.
       """
       @callback init(state) ::
                   {:ok, state}
@@ -74,7 +74,7 @@ defmodule Freddy.Actor do
                   | {:stop, reason :: term}
 
       @doc """
-      Called when the `#{__MODULE__}` process has opened AMQP channel before further initialization.
+      Called when the `#{Macro.to_string(__MODULE__)}` process has opened AMQP channel before further initialization.
 
       Returning `{:noreply, state}` will cause the process to enter the main loop
       with the given state.
@@ -83,7 +83,7 @@ defmodule Freddy.Actor do
       and must reconnect.
 
       Returning `{:stop, reason, state}` will terminate the main loop and call
-      `terminate(reason, state)` before the process exits with reason `reason`.
+      `c:terminate/2` before the process exits with reason `reason`.
       """
       @callback handle_connected(state) ::
                   {:noreply, state}
@@ -92,14 +92,14 @@ defmodule Freddy.Actor do
                   | {:stop, reason :: term, state}
 
       @doc """
-      Called when the `#{__MODULE__}` process has been disconnected from the AMQP broker.
+      Called when the `#{Macro.to_string(__MODULE__)}` process has been disconnected from the AMQP broker.
 
       Returning `{:noreply, state}` causes the process to enter the main loop with
       the given state. The process will not consume any new messages until connection
       to AMQP broker is established again.
 
       Returning `{:stop, reason, state}` will terminate the main loop and call
-      `terminate(reason, state)` before the process exits with reason `reason`.
+      `c:terminate/2` before the process exits with reason `reason`.
       """
       @callback handle_disconnected(reason :: term, state) ::
                   {:noreply, state}
@@ -119,7 +119,7 @@ defmodule Freddy.Actor do
                   | {:stop, reason :: term, reply :: term, state}
 
       @doc """
-      Called when the process receives a cast message sent by `cast/3`. This
+      Called when the process receives a cast message sent by `cast/2`. This
       callback has the same arguments as the `GenServer` equivalent and the
       `:noreply` and `:stop` return tuples behave the same.
       """
@@ -150,14 +150,14 @@ defmodule Freddy.Actor do
       defrecordp :state, unquote(state_keys)
 
       @doc """
-      Start a `#{__MODULE__}` process linked to the current process.
+      Start a `#{Macro.to_string(__MODULE__)}` process linked to the current process.
 
       Arguments:
 
-        * `mod` - the module that defines the server callbacks (like GenServer)
+        * `mod` - the module that defines the server callbacks (like `GenServer`)
         * `connection` - the pid of a `Freddy.Connection` process
         * `config` - the configuration of the consumer
-        * `initial` - the value that will be given to `init/1`
+        * `initial` - the value that will be given to `c:init/1`
         * `opts` - the GenServer options
       """
       @spec start_link(module, connection, Keyword.t(), initial :: term, GenServer.options()) ::
@@ -167,7 +167,7 @@ defmodule Freddy.Actor do
       end
 
       @doc """
-      Start a `#{__MODULE__}` process without linking to the current process.
+      Start a `#{Macro.to_string(__MODULE__)}` process without linking to the current process.
 
       See `start_link/5` for more information.
       """

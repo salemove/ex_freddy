@@ -2,7 +2,41 @@ defmodule Freddy.Consumer do
   @moduledoc """
   This module allows to consume messages from specified queue bound to specified exchange.
 
-  Example:
+  ## Configuration
+
+    * `:exchange` - specifies an exchange to declare. See `Freddy.Exchange` for available
+      options. Optional.
+    * `:queue` - specifies a queue to declare. See `Freddy.Queue` for available options.
+      Mandatory.
+    * `:qos` - configures channel QoS. See `Freddy.QoS` for available options.
+    * `:binds` - specifies bindings to create from the declared queue to the declared
+      exchange. Must be a list of keywords or `%Freddy.Bind{}` structs. See `Freddy.Bind`
+      for available options.
+    * `:routing_keys` - a short way to declare bindings, for example providing a list
+      `["key1", "key2"]` is an equivalent of specifying option
+      `[binds: [[routing_key: "key1"], [routing_key: "key2"]]]`.
+    * `:consumer` - arguments to provide to `basic.consume` method, see below.
+
+  ## Consumer options
+
+    * `:consumer_tag` - Specifies the identifier for the consumer. The consumer tag is
+      local to a channel, so two clients can use the same consumer tags. If this field
+      is empty the server will generate a unique tag. Default is empty.
+    * `:no_local` - If the `:no_local` field is set the server will not send messages
+      to the connection that published them. Default is `false`.
+    * `:no_ack` - If this field is set the server does not expect acknowledgements for
+      messages. That is, when a message is delivered to the client the server assumes
+      the delivery will succeed and immediately dequeues it. This functionality may
+      increase performance but at the cost of reliability. Messages can get lost if a
+      client dies before they are delivered to the application. Defaults to `false`.
+    * `:exclusive` - Request exclusive consumer access, meaning only this consumer can
+      access the queue. Default is `false`.
+    * `:nowait` - If set, the server will not respond to the method and client
+      will not wait for a reply. Default is `false`.
+    * `:arguments` - A set of arguments for the consume. The syntax and semantics
+      of these arguments depends on the server implementation.
+
+  ## Example
 
       defmodule Notifications.Listener do
         use Freddy.Consumer
