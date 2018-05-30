@@ -12,7 +12,11 @@ defmodule Freddy.Mixfile do
       deps: deps(),
       package: package(),
       description: "JSON RPC Client/Server, JSON Publisher-Subscriber over AMQP",
-      dialyzer: [flags: [:error_handling, :race_conditions, :underspecs]]
+      dialyzer: [flags: [:error_handling, :race_conditions, :underspecs]],
+      docs: [
+        extras: ["README.md"],
+        main: "readme"
+      ]
     ]
   end
 
