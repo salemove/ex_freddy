@@ -96,8 +96,8 @@ defmodule ReliableBroadcaster do
 
   @impl true
   # This function is called after an exchange has been declared
-  def handle_connected(%{queue: queue} = state) do
-    new_state = %{state | connected: true, queue: drain_queue(queue)}
+  def handle_connected(meta, %{queue: queue} = state) do
+    new_state = %{state | connected: true, queue: drain_queue(queue, meta)}
     {:noreply, new_state}
   end
 
@@ -120,11 +120,11 @@ defmodule ReliableBroadcaster do
     end
   end
 
-  defp drain_queue(queue) do
+  defp drain_queue(queue, meta) do
     case :queue.out(queue) do
       {{:value, {payload, routing_key, opts}}, new_queue} ->
-        Freddy.Publisher.publish(self(), payload, routing_key, opts)
-        drain_queue(new_queue)
+        Freddy.Publisher.publish(meta, payload, routing_key, opts)
+        drain_queue(new_queue, meta)
 
       {:empty, empty_queue} ->
         empty_queue

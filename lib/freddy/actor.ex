@@ -4,13 +4,14 @@ defmodule Freddy.Actor do
   @type state :: term
   @type reason :: term
   @type reply :: term
+  @type meta :: %{channel: AMQP.Channel.t()}
 
   @callback init(args :: term) ::
               {:ok, state}
               | :ignore
               | {:stop, reason}
 
-  @callback handle_connected(channel :: AMQP.Channel.t(), state) ::
+  @callback handle_connected(meta, state) ::
               {:noreply, state}
               | {:noreply, state, timeout | :hibernate}
               | {:error, state}
@@ -72,24 +73,6 @@ defmodule Freddy.Actor do
                   {:ok, state}
                   | :ignore
                   | {:stop, reason :: term}
-
-      @doc """
-      Called when the `#{Macro.to_string(__MODULE__)}` process has opened AMQP channel before further initialization.
-
-      Returning `{:noreply, state}` will cause the process to enter the main loop
-      with the given state.
-
-      Returning `{:error, state}` will indicate that process failed to perform some critical actions
-      and must reconnect.
-
-      Returning `{:stop, reason, state}` will terminate the main loop and call
-      `c:terminate/2` before the process exits with reason `reason`.
-      """
-      @callback handle_connected(state) ::
-                  {:noreply, state}
-                  | {:noreply, state, timeout | :hibernate}
-                  | {:error, state}
-                  | {:stop, reason :: term, state}
 
       @doc """
       Called when the `#{Macro.to_string(__MODULE__)}` process has been disconnected from the AMQP broker.
@@ -188,23 +171,6 @@ defmodule Freddy.Actor do
       end
 
       @impl true
-      def handle_connected(channel, state(mod: mod, given: given) = state) do
-        case mod.handle_connected(given) do
-          {:noreply, new_given} ->
-            {:noreply, state(state, given: new_given, channel: channel)}
-
-          {:noreply, new_given, timeout} ->
-            {:noreply, state(state, given: new_given, channel: channel), timeout}
-
-          {:error, new_given} ->
-            {:error, state(state, given: new_given)}
-
-          {:stop, reason, new_given} ->
-            {:stop, reason, state(state, given: new_given)}
-        end
-      end
-
-      @impl true
       def handle_disconnected(reason, state(mod: mod, given: given) = state) do
         case mod.handle_disconnected(reason, given) do
           {:noreply, new_given} -> {:noreply, state(state, given: new_given)}
@@ -262,8 +228,23 @@ defmodule Freddy.Actor do
         end
       end
 
-      defoverridable handle_connected: 2,
-                     handle_disconnected: 2,
+      defp handle_mod_connected(meta, state(mod: mod, given: given) = state) do
+        case mod.handle_connected(meta, given) do
+          {:noreply, new_given} ->
+            {:noreply, state(state, given: new_given)}
+
+          {:noreply, new_given, timeout} ->
+            {:noreply, state(state, given: new_given), timeout}
+
+          {:error, new_given} ->
+            {:error, state(state, given: new_given)}
+
+          {:stop, reason, new_given} ->
+            {:stop, reason, state(state, given: new_given)}
+        end
+      end
+
+      defoverridable handle_disconnected: 2,
                      handle_info: 2,
                      handle_cast: 2,
                      handle_call: 3,
@@ -400,7 +381,7 @@ defmodule Freddy.Actor do
   end
 
   defp handle_mod_connected(%{mod: mod, channel: channel, given: given} = state) do
-    case mod.handle_connected(channel, given) do
+    case mod.handle_connected(%{channel: channel}, given) do
       {:noreply, new_given} ->
         {:ok, %{state | given: new_given}}
 

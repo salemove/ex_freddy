@@ -23,8 +23,8 @@ defmodule Freddy.ConsumerTest do
     end
 
     @impl true
-    def handle_connected(pid) do
-      send(pid, :connected)
+    def handle_connected(meta, pid) do
+      send(pid, {:connected, meta})
       {:noreply, pid}
     end
 
@@ -93,12 +93,12 @@ defmodule Freddy.ConsumerTest do
       assert_receive :init
     end
 
-    test "handle_connected/1 callback is called when RabbitMQ channel is opened", %{
+    test "handle_connected/2 callback is called when RabbitMQ channel is opened", %{
       connection: connection
     } do
       {:ok, _consumer} = TestConsumer.start_link(connection, self())
 
-      assert_receive :connected, @assert_receive_interval
+      assert_receive {:connected, %{queue: _, exchange: _}}, @assert_receive_interval
     end
 
     test "handle_ready/2 callback is called when RabbitMQ registers consumer", %{

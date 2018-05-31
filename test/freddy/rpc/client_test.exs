@@ -20,8 +20,8 @@ defmodule Freddy.RPC.ClientTest do
     end
 
     @impl true
-    def handle_connected(pid) do
-      send(pid, :connected)
+    def handle_connected(meta, pid) do
+      send(pid, {:connected, meta})
       {:noreply, pid}
     end
 
@@ -144,7 +144,7 @@ defmodule Freddy.RPC.ClientTest do
     context =
       if context[:server] do
         assert_receive :init
-        assert_receive :connected, @assert_receive_interval
+        assert_receive {:connected, _}, @assert_receive_interval
         assert_receive {:ready, _}, @assert_receive_interval
 
         {:ok, server} = TestServer.start_link(connection, self())
@@ -162,14 +162,14 @@ defmodule Freddy.RPC.ClientTest do
     assert_receive :init
   end
 
-  test "handle_connected/1 is called after init/1" do
+  test "handle_connected/2 is called after init/1" do
     assert_receive :init
-    assert_receive :connected, @assert_receive_interval
+    assert_receive {:connected, %{queue: _, exchange: _}}, @assert_receive_interval
   end
 
   test "handle_ready/2 is called when client is ready to consume response messages" do
     assert_receive :init
-    assert_receive :connected, @assert_receive_interval
+    assert_receive {:connected, _}, @assert_receive_interval
     assert_receive {:ready, "amq.gen-" <> _random_name}, @assert_receive_interval
   end
 

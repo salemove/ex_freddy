@@ -56,6 +56,27 @@ defmodule Freddy.Publisher do
   use Freddy.Actor, exchange: nil
 
   @type routing_key :: String.t()
+  @type connection_info :: %{channel: AMQP.Channel.t(), exchange: Freddy.Exchange.t()}
+
+  @doc """
+  Called when the `Freddy.Publisher` process has opened and AMQP channel and declared an exchange.
+
+  First argument is a map, containing `:channel` and `:exchange` structures.
+
+  Returning `{:noreply, state}` will cause the process to enter the main loop
+  with the given state.
+
+  Returning `{:error, state}` will indicate that process failed to perform some critical actions
+  and must reconnect.
+
+  Returning `{:stop, reason, state}` will terminate the main loop and call
+  `c:terminate/2` before the process exits with reason `reason`.
+  """
+  @callback handle_connected(meta :: connection_info, state) ::
+              {:noreply, state}
+              | {:noreply, state, timeout | :hibernate}
+              | {:error, state}
+              | {:stop, reason :: term, state}
 
   @doc """
   Called before a message will be encoded and published to the exchange.
@@ -120,7 +141,7 @@ defmodule Freddy.Publisher do
       end
 
       @impl true
-      def handle_connected(state) do
+      def handle_connected(_meta, state) do
         {:noreply, state}
       end
 
@@ -172,22 +193,41 @@ defmodule Freddy.Publisher do
   end
 
   @doc """
-  Publishes a message to an exchange through the `Freddy.Publisher` process.
+  Publishes a message to an exchange through the `Freddy.Publisher` process or
+  from `Freddy.Publisher` process using the connection meta information.
+
+  When publishing from within the publisher process, the connection_info can be
+  obtained from `c:handle_connected/2` callback.
   """
-  @spec publish(GenServer.server(), payload :: term, routing_key :: String.t(), opts :: Keyword.t()) ::
-          :ok
-  def publish(publisher, payload, routing_key \\ "", opts \\ []) do
+  @spec publish(
+          GenServer.server() | connection_info,
+          payload :: term,
+          routing_key :: String.t(),
+          opts :: Keyword.t()
+        ) :: :ok
+  def publish(publisher, payload, routing_key \\ "", opts \\ [])
+
+  def publish(%{channel: channel, exchange: exchange} = _meta, payload, routing_key, opts) do
+    Freddy.Exchange.publish(exchange, channel, payload, routing_key, opts)
+  end
+
+  def publish(publisher, payload, routing_key, opts) do
     cast(publisher, {:"$publish", payload, routing_key, opts})
   end
 
   alias Freddy.Exchange
 
   @impl true
-  def handle_connected(channel, state(config: config) = state) do
-    case declare_exchange(config, channel) do
-      {:ok, exchange} -> super(channel, state(state, exchange: exchange))
-      {:error, :closed} -> {:error, state}
-      {:error, reason} -> {:stop, reason, state}
+  def handle_connected(meta, state(config: config) = state) do
+    case declare_exchange(meta, config) do
+      {:ok, %{channel: channel, exchange: exchange} = new_meta} ->
+        handle_mod_connected(new_meta, state(state, channel: channel, exchange: exchange))
+
+      {:error, :closed} ->
+        {:error, state}
+
+      {:error, reason} ->
+        {:stop, reason, state}
     end
   end
 
@@ -200,14 +240,14 @@ defmodule Freddy.Publisher do
     super(message, state)
   end
 
-  defp declare_exchange(config, channel) do
+  defp declare_exchange(%{channel: channel} = meta, config) do
     exchange =
       config
       |> Keyword.get(:exchange, Exchange.default())
       |> Exchange.new()
 
     with :ok <- Exchange.declare(exchange, channel) do
-      {:ok, exchange}
+      {:ok, Map.put(meta, :exchange, exchange)}
     end
   end
 
@@ -235,13 +275,11 @@ defmodule Freddy.Publisher do
        ) do
     case mod.encode_message(payload, routing_key, opts, given) do
       {:ok, new_payload, new_given} ->
-        Exchange.publish(exchange, channel, new_payload, routing_key, opts)
-
+        publish(%{exchange: exchange, channel: channel}, new_payload, routing_key, opts)
         {:noreply, state(state, given: new_given)}
 
       {:ok, new_payload, new_routing_key, new_opts, new_given} ->
-        Exchange.publish(exchange, channel, new_payload, new_routing_key, new_opts)
-
+        publish(%{exchange: exchange, channel: channel}, new_payload, new_routing_key, new_opts)
         {:noreply, state(state, given: new_given)}
 
       {:ignore, new_given} ->
