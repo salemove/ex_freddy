@@ -18,7 +18,7 @@ end
 ## Stable connection
 
 Neither [official RabbitMQ client](https://github.com/rabbitmq/rabbitmq-erlang-client),
-nor it's Elixir wrapper [amqp](https://github.com/pma/amqp) provide an out-of-box way
+nor its Elixir wrapper [amqp](https://github.com/pma/amqp) provide an out-of-box way
 to create a stable monitored connection to RabbitMQ server, which will be gracefully
 reestablished after server restart or intermittent network failures.
 
@@ -26,7 +26,7 @@ Freddy attempts to provide such abstraction, which is called `Freddy.Connection`
 a standard OTP-compliant process that can be easily integrated into OTP supervision tree
 using standard capabilities.
 
-All Freddy behaviours (publishers and consumers) require `Freddy.Connection`.
+All Freddy behaviors (publishers and consumers) require `Freddy.Connection`.
 
 The connection process can be started like this:
 
@@ -292,7 +292,7 @@ end
 
 We recommend you to structure your code in such way that your test environment will not use real RPC client.
 
-For example, you can create a client behaviour and use [Mox](https://github.com/plataformatec/mox) to mock all
+For example, you can create a client behavior and use [Mox](https://github.com/plataformatec/mox) to mock all
 calls to a client. This way you can test how your code communicates with RPC client. Please refer to
 [Mox documentation](https://hexdocs.pm/mox/Mox.html) for more information about mocks and explicit contracts.
 
@@ -330,28 +330,3 @@ test "sends an RPC request" do
   assert [%{routing_key: "server"}] = MockClient.flush(client)
 end
 ```
-
-## License
-
-Copyright (c) 2016-2018 SaleMove Inc.
-
-MIT License
-
-Permission is hereby granted, free of charge, to any person obtaining
-a copy of this software and associated documentation files (the
-"Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
-
-The above copyright notice and this permission notice shall be
-included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
