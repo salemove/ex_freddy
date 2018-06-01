@@ -54,6 +54,8 @@ defmodule Freddy.RPC.Client do
   Called when the RPC client process has opened AMQP channel before registering
   itself as a consumer.
 
+  First argument is a map, containing `:channel`, `:exchange` and `:queue` structures.
+
   Returning `{:noreply, state}` will cause the process to enter the main loop
   with the given state.
 
@@ -63,7 +65,7 @@ defmodule Freddy.RPC.Client do
   Returning `{:stop, reason, state}` will terminate the main loop and call
   `c:terminate/2` before the process exits with reason `reason`.
   """
-  @callback handle_connected(state) ::
+  @callback handle_connected(Freddy.Consumer.connection_info(), state) ::
               {:noreply, state}
               | {:noreply, state, timeout | :hibernate}
               | {:error, state}
@@ -319,7 +321,7 @@ defmodule Freddy.RPC.Client do
       end
 
       @impl true
-      def handle_connected(state) do
+      def handle_connected(_meta, state) do
         {:noreply, state}
       end
 
@@ -512,8 +514,8 @@ defmodule Freddy.RPC.Client do
   end
 
   @impl true
-  def handle_connected(state(mod: mod, given: given) = state) do
-    case mod.handle_connected(given) do
+  def handle_connected(meta, state(mod: mod, given: given) = state) do
+    case mod.handle_connected(meta, given) do
       {:noreply, new_given} ->
         {:noreply, state(state, given: new_given)}
 

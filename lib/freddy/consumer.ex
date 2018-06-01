@@ -76,6 +76,31 @@ defmodule Freddy.Consumer do
   @type routing_key :: String.t()
   @type action :: :ack | :nack | :reject
   @type error :: term
+  @type connection_info :: %{
+          channel: AMQP.Channel.t(),
+          queue: Freddy.Queue.t(),
+          exchange: Freddy.Exchange.t()
+        }
+
+  @doc """
+  Called when the `Freddy.Consumer` process has opened and AMQP channel and declared an exchange and a queue.
+
+  First argument is a map, containing `:channel`, `:exchange` and `:queue` structures.
+
+  Returning `{:noreply, state}` will cause the process to enter the main loop
+  with the given state.
+
+  Returning `{:error, state}` will indicate that process failed to perform some critical actions
+  and must reconnect.
+
+  Returning `{:stop, reason, state}` will terminate the main loop and call
+  `c:terminate/2` before the process exits with reason `reason`.
+  """
+  @callback handle_connected(meta :: connection_info, state) ::
+              {:noreply, state}
+              | {:noreply, state, timeout | :hibernate}
+              | {:error, state}
+              | {:stop, reason :: term, state}
 
   @doc """
   Called when the AMQP server has registered the process as a consumer and it
@@ -161,7 +186,7 @@ defmodule Freddy.Consumer do
       end
 
       @impl true
-      def handle_connected(state) do
+      def handle_connected(_meta, state) do
         {:noreply, state}
       end
 
@@ -235,10 +260,13 @@ defmodule Freddy.Consumer do
   end
 
   @impl true
-  def handle_connected(channel, state(config: config) = state) do
-    case declare_subscription(config, channel) do
-      {:ok, queue, exchange} ->
-        super(channel, state(state, queue: queue, exchange: exchange))
+  def handle_connected(meta, state(config: config) = state) do
+    case declare_subscription(meta, config) do
+      {:ok, %{channel: channel, queue: queue, exchange: exchange} = new_meta} ->
+        handle_mod_connected(
+          new_meta,
+          state(state, channel: channel, queue: queue, exchange: exchange)
+        )
 
       {:error, :closed} ->
         {:error, state}
@@ -248,7 +276,7 @@ defmodule Freddy.Consumer do
     end
   end
 
-  defp declare_subscription(config, channel) do
+  defp declare_subscription(%{channel: channel} = meta, config) do
     exchange =
       config
       |> Keyword.get(:exchange, Exchange.default())
@@ -283,7 +311,12 @@ defmodule Freddy.Consumer do
          :ok <- QoS.declare(qos, channel),
          :ok <- Bind.declare_multiple(binds, exchange, queue, channel),
          {:ok, _consumer_tag} <- Queue.consume(queue, self(), channel, consumer_opts) do
-      {:ok, queue, exchange}
+      new_meta =
+        meta
+        |> Map.put(:queue, queue)
+        |> Map.put(:exchange, exchange)
+
+      {:ok, new_meta}
     end
   end
 

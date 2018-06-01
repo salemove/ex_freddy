@@ -20,8 +20,8 @@ defmodule Freddy.PublisherTest do
     end
 
     @impl true
-    def handle_connected(pid) do
-      send(pid, :connected)
+    def handle_connected(meta, pid) do
+      send(pid, {:connected, meta})
       {:noreply, pid}
     end
 
@@ -110,16 +110,16 @@ defmodule Freddy.PublisherTest do
     assert_receive :init
   end
 
-  test "handle_connected/1 is called when RabbitMQ channel is opened" do
+  test "handle_connected/2 is called when RabbitMQ channel is opened" do
     assert_receive :init
-    assert_receive :connected, @assert_receive_interval
+    assert_receive {:connected, %{exchange: _}}, @assert_receive_interval
   end
 
   test "handle_disconnected/2 is called when RabbitMQ connection is disrupted", %{
     connection: connection
   } do
     assert_receive :init
-    assert_receive :connected, @assert_receive_interval
+    assert_receive {:connected, %{exchange: _}}, @assert_receive_interval
 
     assert {:ok, conn} = Freddy.Connection.get_connection(connection)
 
@@ -129,7 +129,7 @@ defmodule Freddy.PublisherTest do
 
     assert_receive {:disconnected, :shutdown}
     refute_receive :init, @assert_receive_interval
-    assert_receive :connected, @assert_receive_interval
+    assert_receive {:connected, _}, @assert_receive_interval
   end
 
   test "before_publication/4 keeps message unchanged when returns {:ok, state}", %{
