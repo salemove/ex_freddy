@@ -409,6 +409,7 @@ defmodule Freddy.RPC.Client do
 
   alias Freddy.RPC.Request
   alias Freddy.Exchange
+  alias Freddy.AMQP.Channel
 
   @type config :: [timeout: timeout, exchange: Keyword.t()]
 
@@ -574,7 +575,7 @@ defmodule Freddy.RPC.Client do
         %{channel: channel, queue: queue, exchange: exchange} = meta,
         state(mod: mod, given: given) = state
       ) do
-    :ok = AMQP.Basic.return(channel, self())
+    :ok = Channel.register_return_handler(channel, self())
     new_state = state(state, channel: channel, exchange: exchange, queue: queue)
 
     case mod.handle_ready(meta, given) do

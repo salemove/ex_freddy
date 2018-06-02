@@ -172,7 +172,7 @@ defmodule Freddy.RPC.Request do
   Get value of the existing `option` of the request. If option is not set,
   the `default` value is returned.
   """
-  @spec get_option(t, option :: atom, default :: term) :: t
+  @spec get_option(t, option :: atom, default :: term) :: term
   def get_option(%Request{options: options}, option, default \\ nil) do
     Keyword.get(options, option, default)
   end

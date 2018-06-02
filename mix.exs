@@ -33,7 +33,7 @@ defmodule Freddy.Mixfile do
 
   defp deps do
     [
-      {:amqp, "~> 0.3"},
+      {:amqp, "~> 0.3 or ~> 1.0"},
       {:connection, "~> 1.0"},
       {:jason, "~> 1.0"},
       {:ex_doc, "~> 0.16", only: :dev},

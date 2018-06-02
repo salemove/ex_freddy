@@ -244,19 +244,19 @@ defmodule Freddy.Consumer do
   @doc "Ack's a message given its meta"
   @spec ack(meta :: map, opts :: Keyword.t()) :: :ok
   def ack(%{channel: channel, delivery_tag: delivery_tag} = _meta, opts \\ []) do
-    AMQP.Basic.ack(channel, delivery_tag, opts)
+    Freddy.AMQP.Basic.ack(channel, delivery_tag, opts)
   end
 
   @doc "Nack's a message given its meta"
   @spec nack(meta :: map, opts :: Keyword.t()) :: :ok
   def nack(%{channel: channel, delivery_tag: delivery_tag} = _meta, opts \\ []) do
-    AMQP.Basic.nack(channel, delivery_tag, opts)
+    Freddy.AMQP.Basic.nack(channel, delivery_tag, opts)
   end
 
   @doc "Rejects a message given its meta"
   @spec reject(meta :: map, opts :: Keyword.t()) :: :ok
   def reject(%{channel: channel, delivery_tag: delivery_tag} = _meta, opts \\ []) do
-    AMQP.Basic.reject(channel, delivery_tag, opts)
+    Freddy.AMQP.Basic.reject(channel, delivery_tag, opts)
   end
 
   @impl true
@@ -322,7 +322,7 @@ defmodule Freddy.Consumer do
 
   @impl true
   def handle_info(message, state) do
-    case message do
+    case Queue.handle_message(message) do
       {:basic_consume_ok, meta} ->
         handle_mod_ready(meta, state)
 

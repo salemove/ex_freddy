@@ -46,8 +46,6 @@ defmodule Freddy.Queue do
 
   defstruct name: "", opts: []
 
-  import Freddy.Utils.SafeAMQP
-
   @doc """
   Create queue configuration from keyword list or `Freddy.Queue` structure.
   """
@@ -63,17 +61,18 @@ defmodule Freddy.Queue do
   @doc false
   @spec declare(t, AMQP.Channel.t()) :: {:ok, t} | {:error, atom}
   def declare(%__MODULE__{name: name, opts: opts} = queue, channel) do
-    safe_amqp(on_error: {:error, :queue_declare_error}) do
-      {:ok, %{queue: name}} = AMQP.Queue.declare(channel, name, opts)
-      {:ok, %{queue | name: name}}
+    case Freddy.AMQP.Queue.declare(channel, name, opts) do
+      {:ok, name} -> {:ok, %{queue | name: name}}
+      error -> error
     end
   end
 
   @doc false
   @spec consume(t, pid, AMQP.Channel.t()) :: {:ok, String.t()} | {:error, atom}
-  def consume(%__MODULE__{name: name}, consumer_pid, channel, opts \\ []) do
-    safe_amqp(on_error: {:error, :consume_error}) do
-      AMQP.Basic.consume(channel, name, consumer_pid, opts)
-    end
+  def consume(%__MODULE__{name: name} = _queue, consumer_pid, channel, options \\ []) do
+    Freddy.AMQP.Basic.consume(channel, name, consumer_pid, options)
   end
+
+  @doc false
+  defdelegate handle_message(message), to: Freddy.AMQP.Basic
 end

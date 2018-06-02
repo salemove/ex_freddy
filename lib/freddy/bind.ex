@@ -29,8 +29,6 @@ defmodule Freddy.Bind do
   alias Freddy.Queue
   alias Freddy.Exchange
 
-  import Freddy.Utils.SafeAMQP
-
   @doc """
   Create binding configuration from keyword list or `Freddy.Bind` structure.
   """
@@ -43,25 +41,22 @@ defmodule Freddy.Bind do
     struct!(__MODULE__, config)
   end
 
-  @doc false
-  # Binds given `queue_or_exchange` to the given `exchange`.
+  @doc """
+  Bind given `queue_or_exchange` to the given `exchange`.
+  """
   @spec declare(t, Exchange.t(), Exchange.t() | Queue.t(), AMQP.Channel.t()) :: :ok | {:error, atom}
   def declare(bind, exchange, queue_or_exchange, channel)
 
-  def declare(_bind, _queue, %Exchange{name: ""}, _channel) do
+  def declare(_bind, %Exchange{name: ""}, _queue, _channel) do
     :ok
   end
 
-  def declare(bind, %Exchange{} = exchange, %Queue{} = queue, channel) do
-    safe_amqp(on_error: {:error, :bind_error}) do
-      AMQP.Queue.bind(channel, queue.name, exchange.name, as_opts(bind))
-    end
+  def declare(bind, %Exchange{name: exchange}, %Queue{name: queue}, channel) do
+    Freddy.AMQP.Queue.bind(channel, queue, exchange, as_opts(bind))
   end
 
-  def declare(bind, %Exchange{} = exchage, %Exchange{} = source, channel) do
-    safe_amqp(on_error: {:error, :bind_error}) do
-      AMQP.Exchange.bind(channel, exchage.name, source.name, as_opts(bind))
-    end
+  def declare(bind, %Exchange{name: destination}, %Exchange{name: source}, channel) do
+    Freddy.AMQP.Exchange.bind(channel, destination, source, as_opts(bind))
   end
 
   @doc false

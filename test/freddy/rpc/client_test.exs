@@ -324,7 +324,7 @@ defmodule Freddy.RPC.ClientTest do
 
     ref = Process.monitor(pid)
 
-    assert_receive {:DOWN, ^ref, :process, ^pid, :exchange_error}
+    assert_receive {:DOWN, ^ref, :process, ^pid, :precondition_failed}
   end
 
   @tag server: true

@@ -37,7 +37,7 @@ defmodule Freddy.QoS do
 
   defstruct prefetch_count: 0, prefetch_size: 0, global: false
 
-  import Freddy.Utils.SafeAMQP
+  alias Freddy.AMQP.Basic
 
   @doc """
   Create QoS configuration from keyword list or `Freddy.QoS` structure.
@@ -62,13 +62,12 @@ defmodule Freddy.QoS do
   @doc false
   @spec declare(t, AMQP.Channel.t()) :: :ok | {:error, reason :: term}
   def declare(%__MODULE__{} = qos, channel) do
-    opts =
-      qos
-      |> Map.from_struct()
-      |> Keyword.new()
+    Basic.qos(channel, as_opts(qos))
+  end
 
-    safe_amqp(on_error: {:error, :qos_error}) do
-      AMQP.Basic.qos(channel, opts)
-    end
+  defp as_opts(%__MODULE__{} = qos) do
+    qos
+    |> Map.from_struct()
+    |> Keyword.new()
   end
 end
