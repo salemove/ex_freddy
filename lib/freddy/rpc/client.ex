@@ -438,23 +438,30 @@ defmodule Freddy.RPC.Client do
   tree. The process will be started by calling `c:init/1` with the given initial
   value.
 
-  Arguments:
+  ## Arguments
 
-    * `mod` - the module that defines the server callbacks (like `GenServer`)
-    * `conn` - the pid of a `Freddy.Connection` process
+    * `mod` - the module that defines the server callbacks (like in `GenServer`)
+    * `connection` - the pid of a `Freddy.Connection` process
     * `config` - the configuration of the RPC Client (describing the exchange and timeout value)
     * `initial` - the value that will be given to `c:init/1`
-    * `opts` - the `GenServer` options
+    * `options` - the `GenServer` options
+
+  ## Configuration
+
+    * `:exchange` - a keyword list or `%Freddy.Exchange{}` structure, describing an
+      exchange that will be used to publish RPC requests to. If not present, the default
+      RabbitMQ exchange will be used. See `Freddy.Exchange` for available options
+    * `:timeout` - specified default request timeout in milliseconds
   """
   @spec start_link(module, GenServer.server(), config, initial :: term, GenServer.options()) ::
           GenServer.on_start()
-  def start_link(mod, conn, config, initial, opts \\ []) do
+  def start_link(mod, connection, config, initial, options \\ []) do
     Freddy.Consumer.start_link(
       __MODULE__,
-      conn,
+      connection,
       prepare_config(config),
       prepare_init_args(mod, config, initial),
-      opts
+      options
     )
   end
 
@@ -464,13 +471,13 @@ defmodule Freddy.RPC.Client do
   """
   @spec start(module, GenServer.server(), config, initial :: term, GenServer.options()) ::
           GenServer.on_start()
-  def start(mod, conn, config, initial, opts \\ []) do
+  def start(mod, connection, config, initial, options \\ []) do
     Freddy.Consumer.start(
       __MODULE__,
-      conn,
+      connection,
       prepare_config(config),
       prepare_init_args(mod, config, initial),
-      opts
+      options
     )
   end
 
@@ -480,16 +487,36 @@ defmodule Freddy.RPC.Client do
 
   @doc """
   Performs a RPC request and blocks until the response arrives.
+
+  The `routing_key` parameter specifies the routing key for the message. The routing
+  key is used by the RabbitMQ server to route a message from an exchange to worker
+  queues or another exchanges.
+
+  The `payload` parameter specifies the message content as an Erlang term. The payload
+  is converted to binary string by the `c:encode_request/2` callback before sending it
+  to server.
+
+  ## Options
+
+    * `:timeout` - if present, the client is allowed to wait given number of
+      milliseconds for the response message from the server
+    * `:headers` - message headers
+    * `:persistent` - if set, uses persistent delivery mode
+    * `:priority` - message priority, ranging from 0 to 9
+    * `:message_id` - message identifier
+    * `:timestamp` - timestamp associated with this message (epoch time)
+    * `:user_id` - creating user ID. RabbitMQ will validate this against the active connection user
+    * `:app_id` - publishing application ID
   """
   @spec request(GenServer.server(), routing_key, payload, Keyword.t()) ::
           {:ok, response}
           | {:error, reason :: term}
           | {:error, reason :: term, hint :: term}
-  def request(client, routing_key, payload, opts \\ []) do
+  def request(client, routing_key, payload, options \\ []) do
     Freddy.Consumer.call(
       client,
-      {:"$request", payload, routing_key, opts},
-      gen_server_timeout(opts)
+      {:"$request", payload, routing_key, options},
+      gen_server_timeout(options)
     )
   end
 
