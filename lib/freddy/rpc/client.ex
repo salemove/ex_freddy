@@ -413,7 +413,7 @@ defmodule Freddy.RPC.Client do
   @type config :: [timeout: timeout, exchange: Keyword.t()]
 
   @default_timeout 3000
-  @gen_server_timeout 5000
+  @default_gen_server_timeout 5000
 
   @config [
     queue: [opts: [auto_delete: true, exclusive: true]],
@@ -481,12 +481,16 @@ defmodule Freddy.RPC.Client do
   @doc """
   Performs a RPC request and blocks until the response arrives.
   """
-  @spec request(GenServer.server(), routing_key, payload, GenServer.options()) ::
+  @spec request(GenServer.server(), routing_key, payload, Keyword.t()) ::
           {:ok, response}
           | {:error, reason :: term}
           | {:error, reason :: term, hint :: term}
   def request(client, routing_key, payload, opts \\ []) do
-    Freddy.Consumer.call(client, {:"$request", payload, routing_key, opts}, @gen_server_timeout)
+    Freddy.Consumer.call(
+      client,
+      {:"$request", payload, routing_key, opts},
+      gen_server_timeout(opts)
+    )
   end
 
   defp prepare_config(config) do
@@ -497,6 +501,14 @@ defmodule Freddy.RPC.Client do
   defp prepare_init_args(mod, config, initial) do
     timeout = Keyword.get(config, :timeout, @default_timeout)
     {mod, timeout, initial}
+  end
+
+  defp gen_server_timeout(opts) do
+    case Keyword.get(opts, :timeout, :undefined) do
+      :undefined -> @default_gen_server_timeout
+      :infinity -> :infinity
+      timeout when is_integer(timeout) -> timeout + 100
+    end
   end
 
   @impl true
