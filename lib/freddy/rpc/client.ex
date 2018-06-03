@@ -717,13 +717,15 @@ defmodule Freddy.RPC.Client do
          request,
          state(exchange: exchange, queue: queue, channel: channel, timeout: timeout) = state
        ) do
+    ttl = Request.get_option(request, :timeout, timeout)
+
     request =
       request
       |> Request.put_option(:mandatory, true)
       |> Request.put_option(:type, "request")
       |> Request.put_option(:correlation_id, request.id)
       |> Request.put_option(:reply_to, queue.name)
-      |> Request.set_timeout(timeout)
+      |> Request.set_timeout(ttl)
 
     exchange
     |> Exchange.publish(channel, request.payload, request.routing_key, request.options)
