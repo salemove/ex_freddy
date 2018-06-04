@@ -29,11 +29,14 @@ defmodule Freddy.QoS do
       iex> %Freddy.QoS{prefetch_count: 10}
   """
 
-  @type t :: %__MODULE__{
-          prefetch_count: non_neg_integer,
-          prefetch_size: non_neg_integer,
-          global: boolean
+  @type t(prefetch_count, prefetch_size, global) :: %__MODULE__{
+          prefetch_count: prefetch_count,
+          prefetch_size: prefetch_size,
+          global: global
         }
+
+  @type t :: t(non_neg_integer, non_neg_integer, boolean)
+  @type default :: t(0, 0, false)
 
   defstruct prefetch_count: 0, prefetch_size: 0, global: false
 
@@ -54,7 +57,7 @@ defmodule Freddy.QoS do
   @doc """
   Returns default configuration for QoS
   """
-  @spec default() :: t
+  @spec default() :: default
   def default do
     %__MODULE__{}
   end

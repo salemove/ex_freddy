@@ -228,18 +228,39 @@ defmodule Freddy.RPC.ClientTest do
 
   @tag server: true, client_options: [timeout: 100]
   test "on_timeout/2 returns {:error, :timeout} by default", %{client: client} do
-    assert {:error, :timeout} = TestClient.request(client, "server", %{action: :timeout})
+    request =
+      Task.async(fn ->
+        TestClient.request(client, "server", %{action: :timeout})
+      end)
+
+    assert {:ok, {:error, :timeout}} = Task.yield(request, 120)
+  end
+
+  @tag server: true
+  test "on_timeout/2 returns {:error, :timeout} by default when configured per-request", %{
+    client: client
+  } do
+    request =
+      Task.async(fn ->
+        TestClient.request(client, "server", %{action: :timeout}, timeout: 100)
+      end)
+
+    assert {:ok, {:error, :timeout}} = Task.yield(request, 120)
   end
 
   @tag server: true, client_options: [timeout: 100]
   test "on_timeout/2 reply is configurable", %{client: client} do
-    assert :response =
-             TestClient.request(
-               client,
-               "server",
-               %{action: :timeout},
-               on_timeout_action: {:reply, :response}
-             )
+    request =
+      Task.async(fn ->
+        TestClient.request(
+          client,
+          "server",
+          %{action: :timeout},
+          on_timeout_action: {:reply, :response}
+        )
+      end)
+
+    assert {:ok, :response} = Task.yield(request, 120)
   end
 
   test "handle_call/3 is called on Freddy.RPC.Client.call", %{client: client} do
