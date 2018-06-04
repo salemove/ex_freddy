@@ -97,7 +97,7 @@ defmodule Freddy.Integration.RPC.ClientTest do
   defmodule TestServer do
     use Freddy.Consumer
 
-    alias Freddy.Exchange
+    alias Freddy.Core.Exchange
 
     @config [
       exchange: [name: "freddy-rpc-test-exchange", type: :direct],

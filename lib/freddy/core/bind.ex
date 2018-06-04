@@ -1,4 +1,4 @@
-defmodule Freddy.Bind do
+defmodule Freddy.Core.Bind do
   @moduledoc """
   Queue-Exchange or Exchange-Exchange binding configiration
 
@@ -15,12 +15,12 @@ defmodule Freddy.Bind do
 
   ## Example
 
-      iex> %Freddy.Bind{routing_key: "a_key"}
+      iex> %Freddy.Core.Bind{routing_key: "a_key"}
   """
 
-  alias Freddy.Queue
-  alias Freddy.Exchange
-  alias Freddy.Channel
+  alias Freddy.Core.Queue
+  alias Freddy.Core.Exchange
+  alias Freddy.Core.Channel
 
   @type t :: %__MODULE__{
           routing_key: String.t(),
@@ -31,7 +31,7 @@ defmodule Freddy.Bind do
   defstruct channel: nil, routing_key: "#", nowait: false, arguments: []
 
   @doc """
-  Create binding configuration from keyword list or `Freddy.Bind` structure.
+  Create binding configuration from keyword list or `Freddy.Core.Bind` structure.
   """
   @spec new(t | Keyword.t()) :: t
   def new(%__MODULE__{} = bind) do

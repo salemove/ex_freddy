@@ -5,7 +5,7 @@ defmodule Freddy.Connection do
 
   alias Freddy.Utils.MultikeyMap
   alias Freddy.Adapter
-  alias Freddy.Channel
+  alias Freddy.Core.Channel
 
   @type connection :: GenServer.server()
 
@@ -41,7 +41,7 @@ defmodule Freddy.Connection do
   @doc """
   Opens a new AMQP channel
   """
-  @spec open_channel(connection) :: {:ok, Freddy.Channel.t()} | {:error, reason :: term}
+  @spec open_channel(connection) :: {:ok, Channel.t()} | {:error, reason :: term}
   def open_channel(connection) do
     Connection.call(connection, :open_channel)
   end

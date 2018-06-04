@@ -1,10 +1,10 @@
-defmodule Freddy.Actor do
+defmodule Freddy.Core.Actor do
   @moduledoc false
 
   @type state :: term
   @type reason :: term
   @type reply :: term
-  @type meta :: %{channel: Freddy.Channel.t()}
+  @type meta :: %{channel: Freddy.Core.Channel.t()}
 
   @callback init(args :: term) ::
               {:ok, state}
@@ -146,7 +146,7 @@ defmodule Freddy.Actor do
       @spec start_link(module, connection, Keyword.t(), initial :: term, GenServer.options()) ::
               GenServer.on_start()
       def start_link(mod, connection, config, initial, opts \\ []) do
-        Freddy.Actor.start_link(__MODULE__, connection, {mod, config, initial}, opts)
+        Freddy.Core.Actor.start_link(__MODULE__, connection, {mod, config, initial}, opts)
       end
 
       @doc """
@@ -155,7 +155,7 @@ defmodule Freddy.Actor do
       See `start_link/5` for more information.
       """
       def start(mod, connection, config, initial, opts \\ []) do
-        Freddy.Actor.start(__MODULE__, connection, {mod, config, initial}, opts)
+        Freddy.Core.Actor.start(__MODULE__, connection, {mod, config, initial}, opts)
       end
 
       defdelegate call(consumer, message, timeout \\ 5000), to: Connection
@@ -253,7 +253,7 @@ defmodule Freddy.Actor do
   end
 
   use Connection
-  alias Freddy.Channel
+  alias Freddy.Core.Channel
 
   @reconnection_interval 1000
 

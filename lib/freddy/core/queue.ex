@@ -1,4 +1,4 @@
-defmodule Freddy.Queue do
+defmodule Freddy.Core.Queue do
   @moduledoc """
   Queue configuration
 
@@ -23,11 +23,11 @@ defmodule Freddy.Queue do
 
   ### Server-named queue
 
-      iex> %Freddy.Queue{exclusive: true, auto_delete: true}
+      iex> %Freddy.Core.Queue{exclusive: true, auto_delete: true}
 
   ### Client-named queue
 
-      iex> %Freddy.Queue{name: "notifications", durable: true}
+      iex> %Freddy.Core.Queue{name: "notifications", durable: true}
   """
 
   @type t :: %__MODULE__{
@@ -47,7 +47,7 @@ defmodule Freddy.Queue do
   defstruct name: "", opts: []
 
   @doc """
-  Create queue configuration from keyword list or `Freddy.Queue` structure.
+  Create queue configuration from keyword list or `Freddy.Core.Queue` structure.
   """
   @spec new(t | Keyword.t()) :: t
   def new(%__MODULE__{} = queue) do
@@ -59,7 +59,7 @@ defmodule Freddy.Queue do
   end
 
   @doc false
-  @spec declare(t, Freddy.Channel.t()) :: {:ok, t} | {:error, atom}
+  @spec declare(t, Freddy.Core.Channel.t()) :: {:ok, t} | {:error, atom}
   def declare(%__MODULE__{name: name, opts: opts} = queue, %{adapter: adapter, chan: chan}) do
     case adapter.declare_queue(chan, name, opts) do
       {:ok, name} -> {:ok, %{queue | name: name}}
@@ -68,7 +68,7 @@ defmodule Freddy.Queue do
   end
 
   @doc false
-  @spec consume(t, pid, Freddy.Channel.t()) :: {:ok, String.t()} | {:error, atom}
+  @spec consume(t, pid, Freddy.Core.Channel.t()) :: {:ok, String.t()} | {:error, atom}
   def consume(%__MODULE__{name: name}, consumer_pid, %{adapter: adapter, chan: chan}, opts \\ []) do
     adapter.consume(chan, name, consumer_pid, opts)
   end

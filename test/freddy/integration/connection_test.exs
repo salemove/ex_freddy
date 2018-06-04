@@ -2,7 +2,7 @@ defmodule Freddy.Integration.ConnectionTest do
   use ExUnit.Case
 
   alias Freddy.Connection
-  alias Freddy.Channel
+  alias Freddy.Core.Channel
 
   # This test assumes that RabbitMQ server is running with default settings on localhost
 

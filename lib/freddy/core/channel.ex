@@ -1,4 +1,4 @@
-defmodule Freddy.Channel do
+defmodule Freddy.Core.Channel do
   @moduledoc false
 
   @type t :: %__MODULE__{
