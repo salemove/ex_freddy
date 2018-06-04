@@ -1,4 +1,4 @@
-defmodule Freddy.PublisherTest do
+defmodule Freddy.Integration.PublisherTest do
   use Freddy.ConnectionCase
 
   defmodule TestPublisher do
@@ -123,8 +123,8 @@ defmodule Freddy.PublisherTest do
 
     assert {:ok, conn} = Freddy.Connection.get_connection(connection)
 
-    ref = Process.monitor(conn.pid)
-    Process.exit(conn.pid, {:shutdown, {:server_initiated_close, 320, 'Good bye'}})
+    ref = Process.monitor(conn)
+    Process.exit(conn, {:shutdown, {:server_initiated_close, 320, 'Good bye'}})
     assert_receive {:DOWN, ^ref, :process, _, _}
 
     assert_receive {:disconnected, :shutdown}
@@ -201,6 +201,6 @@ defmodule Freddy.PublisherTest do
 
     ref = Process.monitor(pid)
 
-    assert_receive {:DOWN, ^ref, :process, ^pid, :exchange_error}
+    assert_receive {:DOWN, ^ref, :process, ^pid, :precondition_failed}
   end
 end

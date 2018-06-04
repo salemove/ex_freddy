@@ -1,7 +1,8 @@
-defmodule Freddy.ConnectionTest do
+defmodule Freddy.Integration.ConnectionTest do
   use ExUnit.Case
 
   alias Freddy.Connection
+  alias Freddy.Channel
 
   # This test assumes that RabbitMQ server is running with default settings on localhost
 
@@ -16,31 +17,31 @@ defmodule Freddy.ConnectionTest do
     Connection.close(pid)
 
     assert {:ok, conn2} = Connection.get_connection(pid)
-    assert conn.pid != conn2.pid
+    assert conn != conn2
   end
 
   test "re-establishes connection if it's disrupted" do
     {:ok, pid} = Connection.start_link()
     assert {:ok, conn} = Connection.get_connection(pid)
 
-    ref = Process.monitor(conn.pid)
-    Process.exit(conn.pid, :kill)
+    ref = Process.monitor(conn)
+    Process.exit(conn, :kill)
     assert_receive {:DOWN, ^ref, :process, _, :killed}
 
     assert {:ok, conn2} = Connection.get_connection(pid)
-    assert conn.pid != conn2.pid
+    assert conn != conn2
   end
 
   test "re-establishes connection if server closed it" do
     {:ok, pid} = Connection.start_link()
     assert {:ok, conn} = Connection.get_connection(pid)
 
-    ref = Process.monitor(conn.pid)
-    Process.exit(conn.pid, {:shutdown, {:server_initiated_close, 320, 'Good bye'}})
+    ref = Process.monitor(conn)
+    Process.exit(conn, {:shutdown, {:server_initiated_close, 320, 'Good bye'}})
     assert_receive {:DOWN, ^ref, :process, _, _}
 
     assert {:ok, conn2} = Connection.get_connection(pid)
-    assert conn.pid != conn2.pid
+    assert conn != conn2
   end
 
   test "closes channel gracefully if calling process is stopped" do
@@ -60,7 +61,7 @@ defmodule Freddy.ConnectionTest do
       end)
 
     assert_receive {:channel, chan}
-    ref = Process.monitor(chan.pid)
+    ref = Channel.monitor(chan)
 
     send(child, :stop)
     assert_receive {:DOWN, ^ref, :process, _, :normal}

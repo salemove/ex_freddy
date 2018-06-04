@@ -18,18 +18,17 @@ defmodule Freddy.Bind do
       iex> %Freddy.Bind{routing_key: "a_key"}
   """
 
+  alias Freddy.Queue
+  alias Freddy.Exchange
+  alias Freddy.Channel
+
   @type t :: %__MODULE__{
           routing_key: String.t(),
           nowait: boolean,
           arguments: Keyword.t()
         }
 
-  defstruct routing_key: "#", nowait: false, arguments: []
-
-  alias Freddy.Queue
-  alias Freddy.Exchange
-
-  import Freddy.Utils.SafeAMQP
+  defstruct channel: nil, routing_key: "#", nowait: false, arguments: []
 
   @doc """
   Create binding configuration from keyword list or `Freddy.Bind` structure.
@@ -45,27 +44,23 @@ defmodule Freddy.Bind do
 
   @doc false
   # Binds given `queue_or_exchange` to the given `exchange`.
-  @spec declare(t, Exchange.t(), Exchange.t() | Queue.t(), AMQP.Channel.t()) :: :ok | {:error, atom}
+  @spec declare(t, Exchange.t(), Exchange.t() | Queue.t(), Channel.t()) :: :ok | {:error, atom}
   def declare(bind, exchange, queue_or_exchange, channel)
 
   def declare(_bind, _queue, %Exchange{name: ""}, _channel) do
     :ok
   end
 
-  def declare(bind, %Exchange{} = exchange, %Queue{} = queue, channel) do
-    safe_amqp(on_error: {:error, :bind_error}) do
-      AMQP.Queue.bind(channel, queue.name, exchange.name, as_opts(bind))
-    end
+  def declare(bind, %Exchange{} = exchange, %Queue{} = queue, %{adapter: adapter, chan: chan}) do
+    adapter.bind_queue(chan, queue.name, exchange.name, as_opts(bind))
   end
 
-  def declare(bind, %Exchange{} = exchage, %Exchange{} = source, channel) do
-    safe_amqp(on_error: {:error, :bind_error}) do
-      AMQP.Exchange.bind(channel, exchage.name, source.name, as_opts(bind))
-    end
+  def declare(bind, %Exchange{} = exchange, %Exchange{} = source, %{adapter: adapter, chan: chan}) do
+    adapter.bind_exchange(chan, exchange.name, source.name, as_opts(bind))
   end
 
   @doc false
-  @spec declare_multiple([t], Exchange.t(), Exchange.t() | Queue.t(), AMQP.Channel.t()) ::
+  @spec declare_multiple([t], Exchange.t(), Exchange.t() | Queue.t(), Channel.t()) ::
           :ok | {:error, atom}
   def declare_multiple(binds, exchange, queue_or_exchange, channel) do
     Enum.reduce_while(binds, :ok, fn bind, _acc ->

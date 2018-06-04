@@ -77,7 +77,7 @@ defmodule Freddy.Consumer do
   @type action :: :ack | :nack | :reject
   @type error :: term
   @type connection_info :: %{
-          channel: AMQP.Channel.t(),
+          channel: Freddy.Channel.t(),
           queue: Freddy.Queue.t(),
           exchange: Freddy.Exchange.t()
         }
@@ -243,20 +243,29 @@ defmodule Freddy.Consumer do
 
   @doc "Ack's a message given its meta"
   @spec ack(meta :: map, opts :: Keyword.t()) :: :ok
-  def ack(%{channel: channel, delivery_tag: delivery_tag} = _meta, opts \\ []) do
-    AMQP.Basic.ack(channel, delivery_tag, opts)
+  def ack(
+        %{channel: %{adapter: adapter, chan: chan}, delivery_tag: delivery_tag} = _meta,
+        opts \\ []
+      ) do
+    adapter.ack(chan, delivery_tag, opts)
   end
 
   @doc "Nack's a message given its meta"
   @spec nack(meta :: map, opts :: Keyword.t()) :: :ok
-  def nack(%{channel: channel, delivery_tag: delivery_tag} = _meta, opts \\ []) do
-    AMQP.Basic.nack(channel, delivery_tag, opts)
+  def nack(
+        %{channel: %{adapter: adapter, chan: chan}, delivery_tag: delivery_tag} = _meta,
+        opts \\ []
+      ) do
+    adapter.nack(chan, delivery_tag, opts)
   end
 
   @doc "Rejects a message given its meta"
   @spec reject(meta :: map, opts :: Keyword.t()) :: :ok
-  def reject(%{channel: channel, delivery_tag: delivery_tag} = _meta, opts \\ []) do
-    AMQP.Basic.reject(channel, delivery_tag, opts)
+  def reject(
+        %{channel: %{adapter: adapter, chan: chan}, delivery_tag: delivery_tag} = _meta,
+        opts \\ []
+      ) do
+    adapter.reject(chan, delivery_tag, opts)
   end
 
   @impl true
@@ -321,21 +330,24 @@ defmodule Freddy.Consumer do
   end
 
   @impl true
-  def handle_info(message, state) do
-    case message do
-      {:basic_consume_ok, meta} ->
+  def handle_info(message, state(channel: %{adapter: adapter}) = state) do
+    case adapter.handle_message(message) do
+      {:consume_ok, meta} ->
         handle_mod_ready(meta, state)
 
-      {:basic_deliver, payload, meta} ->
+      {:deliver, payload, meta} ->
         handle_delivery(payload, meta, state)
 
-      {:basic_cancel, _meta} ->
+      {:cancel, _meta} ->
         {:stop, :canceled, state}
 
-      {:basic_cancel_ok, _meta} ->
+      {:cancel_ok, _meta} ->
         {:stop, {:shutdown, :canceled}, state}
 
-      message ->
+      {:return, _payload, _meta} = message ->
+        super(message, state)
+
+      :unknown ->
         super(message, state)
     end
   end

@@ -56,7 +56,7 @@ defmodule Freddy.Publisher do
   use Freddy.Actor, exchange: nil
 
   @type routing_key :: String.t()
-  @type connection_info :: %{channel: AMQP.Channel.t(), exchange: Freddy.Exchange.t()}
+  @type connection_info :: %{channel: Freddy.Channel.t(), exchange: Freddy.Exchange.t()}
 
   @doc """
   Called when the `Freddy.Publisher` process has opened and AMQP channel and declared an exchange.

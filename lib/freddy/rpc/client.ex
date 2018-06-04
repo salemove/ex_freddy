@@ -408,6 +408,7 @@ defmodule Freddy.RPC.Client do
   require Record
 
   alias Freddy.RPC.Request
+  alias Freddy.Channel
   alias Freddy.Exchange
 
   @type config :: [timeout: timeout, exchange: Keyword.t()]
@@ -574,7 +575,7 @@ defmodule Freddy.RPC.Client do
         %{channel: channel, queue: queue, exchange: exchange} = meta,
         state(mod: mod, given: given) = state
       ) do
-    :ok = AMQP.Basic.return(channel, self())
+    :ok = Channel.register_return_handler(channel, self())
     new_state = state(state, channel: channel, exchange: exchange, queue: queue)
 
     case mod.handle_ready(meta, given) do
@@ -677,7 +678,7 @@ defmodule Freddy.RPC.Client do
 
   @impl true
   def handle_info(
-        {:basic_return, _payload, %{correlation_id: request_id} = _meta},
+        {:return, _payload, %{correlation_id: request_id} = _meta},
         state(mod: mod, given: given) = state
       ) do
     pop_waiting(request_id, state, fn request, state ->

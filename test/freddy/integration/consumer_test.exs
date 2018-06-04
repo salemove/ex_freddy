@@ -1,4 +1,4 @@
-defmodule Freddy.ConsumerTest do
+defmodule Freddy.Integration.ConsumerTest do
   use Freddy.ConnectionCase
 
   defmodule TestConsumer do
@@ -146,8 +146,8 @@ defmodule Freddy.ConsumerTest do
     } do
       assert {:ok, conn} = Freddy.Connection.get_connection(connection)
 
-      ref = Process.monitor(conn.pid)
-      Process.exit(conn.pid, {:shutdown, {:server_initiated_close, 320, 'Good bye'}})
+      ref = Process.monitor(conn)
+      Process.exit(conn, {:shutdown, {:server_initiated_close, 320, 'Good bye'}})
       assert_receive {:DOWN, ^ref, :process, _, _}
 
       assert_receive {:disconnected, :shutdown}
