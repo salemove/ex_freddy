@@ -4,6 +4,8 @@ defmodule Freddy.Connection do
   """
 
   alias Freddy.Utils.MultikeyMap
+  alias Freddy.Adapter
+  alias Freddy.Core.Channel
 
   @type connection :: GenServer.server()
 
@@ -39,15 +41,15 @@ defmodule Freddy.Connection do
   @doc """
   Opens a new AMQP channel
   """
-  @spec open_channel(connection) :: {:ok, AMQP.Channel.t()} | {:error, reason :: term}
+  @spec open_channel(connection) :: {:ok, Channel.t()} | {:error, reason :: term}
   def open_channel(connection) do
     Connection.call(connection, :open_channel)
   end
 
   @doc """
-  Returns underlying AMQP connection structure
+  Returns underlying connection PID
   """
-  @spec get_connection(connection) :: {:ok, AMQP.Connection.t()} | {:error, :closed}
+  @spec get_connection(connection) :: {:ok, Freddy.Adapter.connection()} | {:error, :closed}
   def get_connection(connection) do
     Connection.call(connection, :get)
   end
@@ -66,6 +68,7 @@ defmodule Freddy.Connection do
   import Record
 
   defrecordp :state,
+    adapter: nil,
     opts: nil,
     connection: nil,
     channels: MultikeyMap.new()
@@ -73,15 +76,15 @@ defmodule Freddy.Connection do
   @impl true
   def init(opts) do
     Process.flag(:trap_exit, true)
-
-    {:connect, :init, state(opts: opts)}
+    {adapter, opts} = Keyword.pop(opts, :adapter, :amqp)
+    {:connect, :init, state(opts: opts, adapter: Adapter.get(adapter))}
   end
 
   @impl true
-  def connect(_info, state(opts: opts) = state) do
-    case AMQP.Connection.open(opts) do
+  def connect(_info, state(adapter: adapter, opts: opts) = state) do
+    case adapter.open_connection(opts) do
       {:ok, connection} ->
-        Process.link(connection.pid)
+        adapter.link_connection(connection)
         {:ok, state(state, connection: connection)}
 
       _error ->
@@ -106,24 +109,19 @@ defmodule Freddy.Connection do
   def handle_call(
         :open_channel,
         {from, _ref},
-        state(connection: connection, channels: channels) = state
+        state(adapter: adapter, connection: connection, channels: channels) = state
       ) do
     try do
-      case AMQP.Channel.open(connection) do
+      case Channel.open(adapter, connection) do
         {:ok, chan} ->
           monitor_ref = Process.monitor(from)
-          channel_ref = Process.monitor(chan.pid)
+          channel_ref = Channel.monitor(chan)
           channels = MultikeyMap.put(channels, [monitor_ref, channel_ref], chan)
 
           {:reply, {:ok, chan}, state(state, channels: channels)}
 
-        # amqp 1.0 format
         {:error, _reason} = reply ->
           {:reply, reply, state}
-
-        # amqp 0.x format
-        reason ->
-          {:reply, {:error, reason}, state}
       end
     catch
       :exit, {:noproc, _} ->
@@ -134,27 +132,20 @@ defmodule Freddy.Connection do
     end
   end
 
-  def handle_call({:close, timeout}, _from, state(connection: connection) = state) do
-    {:disconnect, :close, close_connection(connection, timeout), state}
+  def handle_call({:close, timeout}, _from, state(adapter: adapter, connection: connection) = state) do
+    {:disconnect, :close, close_connection(adapter, connection, timeout), state}
   end
 
   @impl true
   def handle_info(
-        {:EXIT, connection, {:shutdown, {:server_initiated_close, _, _}}},
-        state(connection: %{pid: connection}) = state
-      ) do
-    {:disconnect, {:error, :server_initiated_close}, state}
-  end
-
-  def handle_info({:EXIT, connection, reason}, state(connection: %{pid: connection}) = state) do
-    {:disconnect, {:error, reason}, state}
-  end
-
-  def handle_info(
         {:EXIT, connection, {:shutdown, :normal}},
-        state(connection: %{pid: connection}) = state
+        state(connection: connection) = state
       ) do
-    {:noreply, state}
+    {:noreply, state(state, connection: nil)}
+  end
+
+  def handle_info({:EXIT, connection, reason}, state(connection: connection) = state) do
+    {:disconnect, {:error, reason}, state}
   end
 
   def handle_info({:EXIT, _process, reason}, state) do
@@ -170,9 +161,9 @@ defmodule Freddy.Connection do
   end
 
   @impl true
-  def terminate(_reason, state(connection: connection)) do
+  def terminate(_reason, state(adapter: adapter, connection: connection)) do
     if connection do
-      AMQP.Connection.close(connection)
+      adapter.close_connection(connection)
     end
   end
 
@@ -182,28 +173,23 @@ defmodule Freddy.Connection do
         state
 
       {channel, new_channels} ->
-        try do
-          AMQP.Channel.close(channel)
-        catch
-          _, _ -> :ok
-        end
-
+        Channel.close(channel)
         state(state, channels: new_channels)
     end
   end
 
-  defp close_connection(%{pid: pid} = connection, timeout) do
+  defp close_connection(adapter, connection, timeout) do
     try do
-      AMQP.Connection.close(connection)
+      adapter.close_connection(connection)
 
       receive do
-        {:EXIT, ^pid, _reason} -> :ok
+        {:EXIT, ^connection, _reason} -> :ok
       after
         timeout ->
-          Process.exit(pid, :kill)
+          Process.exit(connection, :kill)
 
           receive do
-            {:EXIT, ^pid, _reason} -> :ok
+            {:EXIT, ^connection, _reason} -> :ok
           end
       end
     catch

@@ -1,4 +1,4 @@
-defmodule Freddy.Notifications.ListenerTest do
+defmodule Freddy.Integration.Notifications.BroadcasterTest do
   use Freddy.ConnectionCase
 
   defmodule TestBroadcaster do
@@ -10,15 +10,16 @@ defmodule Freddy.Notifications.ListenerTest do
   end
 
   defmodule TestListener do
-    use Freddy.Notifications.Listener
+    use Freddy.Consumer
 
     @config [
       queue: [opts: [auto_delete: true]],
+      exchange: [name: "freddy-topic", type: :topic],
       routing_keys: ["freddy-test"]
     ]
 
     def start_link(conn, pid) do
-      Freddy.Notifications.Listener.start_link(__MODULE__, conn, @config, pid)
+      Freddy.Consumer.start_link(__MODULE__, conn, @config, pid)
     end
 
     @impl true
@@ -37,7 +38,7 @@ defmodule Freddy.Notifications.ListenerTest do
   # we're dealing with real RabbitMQ instance which may add latency
   @assert_receive_interval 500
 
-  test "consumes messages from freddy-topic exchange", %{connection: connection} do
+  test "publishes message into freddy-topic exchange", %{connection: connection} do
     {:ok, broadcaster} = TestBroadcaster.start_link(connection)
     {:ok, _consumer} = TestListener.start_link(connection, self())
 

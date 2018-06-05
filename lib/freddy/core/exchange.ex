@@ -1,4 +1,4 @@
-defmodule Freddy.Exchange do
+defmodule Freddy.Core.Exchange do
   @moduledoc """
   Exchange configuration.
 
@@ -26,7 +26,7 @@ defmodule Freddy.Exchange do
 
   ## Example
 
-      iex> %Freddy.Exchange{name: "freddy-topic", type: :topic, durable: true}
+      iex> %Freddy.Core.Exchange{name: "freddy-topic", type: :topic, durable: true}
   """
 
   @type t :: %__MODULE__{
@@ -46,10 +46,8 @@ defmodule Freddy.Exchange do
 
   defstruct name: "", type: :direct, opts: []
 
-  import Freddy.Utils.SafeAMQP
-
   @doc """
-  Create exchange configuration from keyword list or `Freddy.Exchange` structure.
+  Create exchange configuration from keyword list or `Freddy.Core.Exchange` structure.
   """
   @spec new(t | Keyword.t()) :: t
   def new(%__MODULE__{} = exchange) do
@@ -70,23 +68,19 @@ defmodule Freddy.Exchange do
   end
 
   @doc false
-  @spec declare(t, AMQP.Channel.t()) :: :ok | {:error, atom}
+  @spec declare(t, Freddy.Core.Channel.t()) :: :ok | {:error, atom}
   def declare(%__MODULE__{name: ""}, _channel) do
     :ok
   end
 
-  def declare(%__MODULE__{} = exchange, channel) do
-    safe_amqp(on_error: {:error, :exchange_error}) do
-      AMQP.Exchange.declare(channel, exchange.name, exchange.type, exchange.opts)
-    end
+  def declare(%__MODULE__{} = exchange, %{adapter: adapter, chan: chan}) do
+    adapter.declare_exchange(chan, exchange.name, exchange.type, exchange.opts)
   end
 
   @doc false
-  @spec publish(t, AMQP.Channel.t(), String.t(), String.t(), Keyword.t()) :: :ok | {:error, atom}
-  def publish(%__MODULE__{} = exchange, channel, message, routing_key, opts) do
-    case AMQP.Basic.publish(channel, exchange.name, routing_key, message, opts) do
-      :ok -> :ok
-      reason -> {:error, reason}
-    end
+  @spec publish(t, Freddy.Core.Channel.t(), String.t(), String.t(), Keyword.t()) ::
+          :ok | {:error, atom}
+  def publish(%__MODULE__{} = exchange, %{adapter: adapter, chan: chan}, message, routing_key, opts) do
+    adapter.publish(chan, exchange.name, routing_key, message, opts)
   end
 end

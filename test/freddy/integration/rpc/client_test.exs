@@ -1,4 +1,4 @@
-defmodule Freddy.RPC.ClientTest do
+defmodule Freddy.Integration.RPC.ClientTest do
   use Freddy.ConnectionCase
 
   defmodule TestClient do
@@ -97,7 +97,7 @@ defmodule Freddy.RPC.ClientTest do
   defmodule TestServer do
     use Freddy.Consumer
 
-    alias Freddy.Exchange
+    alias Freddy.Core.Exchange
 
     @config [
       exchange: [name: "freddy-rpc-test-exchange", type: :direct],
@@ -292,8 +292,8 @@ defmodule Freddy.RPC.ClientTest do
   } do
     assert {:ok, conn} = Freddy.Connection.get_connection(connection)
 
-    ref = Process.monitor(conn.pid)
-    Process.exit(conn.pid, {:shutdown, {:server_initiated_close, 320, 'Good bye'}})
+    ref = Process.monitor(conn)
+    Process.exit(conn, {:shutdown, {:server_initiated_close, 320, 'Good bye'}})
     assert_receive {:DOWN, ^ref, :process, _, _}
 
     assert_receive {:disconnected, :shutdown}
@@ -324,7 +324,7 @@ defmodule Freddy.RPC.ClientTest do
 
     ref = Process.monitor(pid)
 
-    assert_receive {:DOWN, ^ref, :process, ^pid, :exchange_error}
+    assert_receive {:DOWN, ^ref, :process, ^pid, :precondition_failed}
   end
 
   @tag server: true

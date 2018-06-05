@@ -1,4 +1,4 @@
-defmodule Freddy.Queue do
+defmodule Freddy.Core.Queue do
   @moduledoc """
   Queue configuration
 
@@ -23,11 +23,11 @@ defmodule Freddy.Queue do
 
   ### Server-named queue
 
-      iex> %Freddy.Queue{exclusive: true, auto_delete: true}
+      iex> %Freddy.Core.Queue{exclusive: true, auto_delete: true}
 
   ### Client-named queue
 
-      iex> %Freddy.Queue{name: "notifications", durable: true}
+      iex> %Freddy.Core.Queue{name: "notifications", durable: true}
   """
 
   @type t :: %__MODULE__{
@@ -46,10 +46,8 @@ defmodule Freddy.Queue do
 
   defstruct name: "", opts: []
 
-  import Freddy.Utils.SafeAMQP
-
   @doc """
-  Create queue configuration from keyword list or `Freddy.Queue` structure.
+  Create queue configuration from keyword list or `Freddy.Core.Queue` structure.
   """
   @spec new(t | Keyword.t()) :: t
   def new(%__MODULE__{} = queue) do
@@ -61,19 +59,17 @@ defmodule Freddy.Queue do
   end
 
   @doc false
-  @spec declare(t, AMQP.Channel.t()) :: {:ok, t} | {:error, atom}
-  def declare(%__MODULE__{name: name, opts: opts} = queue, channel) do
-    safe_amqp(on_error: {:error, :queue_declare_error}) do
-      {:ok, %{queue: name}} = AMQP.Queue.declare(channel, name, opts)
-      {:ok, %{queue | name: name}}
+  @spec declare(t, Freddy.Core.Channel.t()) :: {:ok, t} | {:error, atom}
+  def declare(%__MODULE__{name: name, opts: opts} = queue, %{adapter: adapter, chan: chan}) do
+    case adapter.declare_queue(chan, name, opts) do
+      {:ok, name} -> {:ok, %{queue | name: name}}
+      error -> error
     end
   end
 
   @doc false
-  @spec consume(t, pid, AMQP.Channel.t()) :: {:ok, String.t()} | {:error, atom}
-  def consume(%__MODULE__{name: name}, consumer_pid, channel, opts \\ []) do
-    safe_amqp(on_error: {:error, :consume_error}) do
-      AMQP.Basic.consume(channel, name, consumer_pid, opts)
-    end
+  @spec consume(t, pid, Freddy.Core.Channel.t()) :: {:ok, String.t()} | {:error, atom}
+  def consume(%__MODULE__{name: name}, consumer_pid, %{adapter: adapter, chan: chan}, opts \\ []) do
+    adapter.consume(chan, name, consumer_pid, opts)
   end
 end

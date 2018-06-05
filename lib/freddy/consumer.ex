@@ -4,13 +4,13 @@ defmodule Freddy.Consumer do
 
   ## Configuration
 
-    * `:exchange` - specifies an exchange to declare. See `Freddy.Exchange` for available
+    * `:exchange` - specifies an exchange to declare. See `Freddy.Core.Exchange` for available
       options. Optional.
-    * `:queue` - specifies a queue to declare. See `Freddy.Queue` for available options.
+    * `:queue` - specifies a queue to declare. See `Freddy.Core.Queue` for available options.
       Mandatory.
-    * `:qos` - configures channel QoS. See `Freddy.QoS` for available options.
+    * `:qos` - configures channel QoS. See `Freddy.Core.QoS` for available options.
     * `:binds` - specifies bindings to create from the declared queue to the declared
-      exchange. Must be a list of keywords or `%Freddy.Bind{}` structs. See `Freddy.Bind`
+      exchange. Must be a list of keywords or `%Freddy.Core.Bind{}` structs. See `Freddy.Core.Bind`
       for available options.
     * `:routing_keys` - a short way to declare bindings, for example providing a list
       `["key1", "key2"]` is an equivalent of specifying option
@@ -71,15 +71,15 @@ defmodule Freddy.Consumer do
       end
   """
 
-  use Freddy.Actor, queue: nil, exchange: nil
+  use Freddy.Core.Actor, queue: nil, exchange: nil
 
   @type routing_key :: String.t()
   @type action :: :ack | :nack | :reject
   @type error :: term
   @type connection_info :: %{
-          channel: AMQP.Channel.t(),
-          queue: Freddy.Queue.t(),
-          exchange: Freddy.Exchange.t()
+          channel: Freddy.Core.Channel.t(),
+          queue: Freddy.Core.Queue.t(),
+          exchange: Freddy.Core.Exchange.t()
         }
 
   @doc """
@@ -236,27 +236,36 @@ defmodule Freddy.Consumer do
     end
   end
 
-  alias Freddy.Exchange
-  alias Freddy.Queue
-  alias Freddy.QoS
-  alias Freddy.Bind
+  alias Freddy.Core.Exchange
+  alias Freddy.Core.Queue
+  alias Freddy.Core.QoS
+  alias Freddy.Core.Bind
 
   @doc "Ack's a message given its meta"
   @spec ack(meta :: map, opts :: Keyword.t()) :: :ok
-  def ack(%{channel: channel, delivery_tag: delivery_tag} = _meta, opts \\ []) do
-    AMQP.Basic.ack(channel, delivery_tag, opts)
+  def ack(
+        %{channel: %{adapter: adapter, chan: chan}, delivery_tag: delivery_tag} = _meta,
+        opts \\ []
+      ) do
+    adapter.ack(chan, delivery_tag, opts)
   end
 
   @doc "Nack's a message given its meta"
   @spec nack(meta :: map, opts :: Keyword.t()) :: :ok
-  def nack(%{channel: channel, delivery_tag: delivery_tag} = _meta, opts \\ []) do
-    AMQP.Basic.nack(channel, delivery_tag, opts)
+  def nack(
+        %{channel: %{adapter: adapter, chan: chan}, delivery_tag: delivery_tag} = _meta,
+        opts \\ []
+      ) do
+    adapter.nack(chan, delivery_tag, opts)
   end
 
   @doc "Rejects a message given its meta"
   @spec reject(meta :: map, opts :: Keyword.t()) :: :ok
-  def reject(%{channel: channel, delivery_tag: delivery_tag} = _meta, opts \\ []) do
-    AMQP.Basic.reject(channel, delivery_tag, opts)
+  def reject(
+        %{channel: %{adapter: adapter, chan: chan}, delivery_tag: delivery_tag} = _meta,
+        opts \\ []
+      ) do
+    adapter.reject(chan, delivery_tag, opts)
   end
 
   @impl true
@@ -321,21 +330,24 @@ defmodule Freddy.Consumer do
   end
 
   @impl true
-  def handle_info(message, state) do
-    case message do
-      {:basic_consume_ok, meta} ->
+  def handle_info(message, state(channel: %{adapter: adapter}) = state) do
+    case adapter.handle_message(message) do
+      {:consume_ok, meta} ->
         handle_mod_ready(meta, state)
 
-      {:basic_deliver, payload, meta} ->
+      {:deliver, payload, meta} ->
         handle_delivery(payload, meta, state)
 
-      {:basic_cancel, _meta} ->
+      {:cancel, _meta} ->
         {:stop, :canceled, state}
 
-      {:basic_cancel_ok, _meta} ->
+      {:cancel_ok, _meta} ->
         {:stop, {:shutdown, :canceled}, state}
 
-      message ->
+      {:return, _payload, _meta} = message ->
+        super(message, state)
+
+      :unknown ->
         super(message, state)
     end
   end

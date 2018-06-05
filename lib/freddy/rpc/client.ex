@@ -408,7 +408,8 @@ defmodule Freddy.RPC.Client do
   require Record
 
   alias Freddy.RPC.Request
-  alias Freddy.Exchange
+  alias Freddy.Core.Channel
+  alias Freddy.Core.Exchange
 
   @type config :: [timeout: timeout, exchange: Keyword.t()]
 
@@ -448,9 +449,9 @@ defmodule Freddy.RPC.Client do
 
   ## Configuration
 
-    * `:exchange` - a keyword list or `%Freddy.Exchange{}` structure, describing an
+    * `:exchange` - a keyword list or `%Freddy.Core.Exchange{}` structure, describing an
       exchange that will be used to publish RPC requests to. If not present, the default
-      RabbitMQ exchange will be used. See `Freddy.Exchange` for available options
+      RabbitMQ exchange will be used. See `Freddy.Core.Exchange` for available options
     * `:timeout` - specified default request timeout in milliseconds
   """
   @spec start_link(module, GenServer.server(), config, initial :: term, GenServer.options()) ::
@@ -574,7 +575,7 @@ defmodule Freddy.RPC.Client do
         %{channel: channel, queue: queue, exchange: exchange} = meta,
         state(mod: mod, given: given) = state
       ) do
-    :ok = AMQP.Basic.return(channel, self())
+    :ok = Channel.register_return_handler(channel, self())
     new_state = state(state, channel: channel, exchange: exchange, queue: queue)
 
     case mod.handle_ready(meta, given) do
@@ -677,7 +678,7 @@ defmodule Freddy.RPC.Client do
 
   @impl true
   def handle_info(
-        {:basic_return, _payload, %{correlation_id: request_id} = _meta},
+        {:return, _payload, %{correlation_id: request_id} = _meta},
         state(mod: mod, given: given) = state
       ) do
     pop_waiting(request_id, state, fn request, state ->

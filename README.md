@@ -81,7 +81,7 @@ connection is disrupted (instead of silently dropping them):
 defmodule ReliableBroadcaster do
   use Freddy.Publisher
 
-  @exchange %Freddy.Exchange{name: "notifications", type: :fanout, opts: [durable: true]}
+  @exchange %Freddy.Core.Exchange{name: "notifications", type: :fanout, opts: [durable: true]}
   @config [exchange: @exchange]
 
   def start_link(connection, opts \\ []) do

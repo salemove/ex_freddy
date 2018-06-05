@@ -48,15 +48,15 @@ defmodule Freddy.Publisher do
   is declared through the new channel based on the given configuration.
 
   The configuration must be a `Keyword.t` that contains a single key: `:exchange`
-  whose value is the configuration for the `Freddy.Exchange`.
+  whose value is the configuration for the `Freddy.Core.Exchange`.
 
-  Check `Freddy.Exchange` for more detailed information.
+  Check `Freddy.Core.Exchange` for more detailed information.
   """
 
-  use Freddy.Actor, exchange: nil
+  use Freddy.Core.Actor, exchange: nil
 
   @type routing_key :: String.t()
-  @type connection_info :: %{channel: AMQP.Channel.t(), exchange: Freddy.Exchange.t()}
+  @type connection_info :: %{channel: Freddy.Core.Channel.t(), exchange: Freddy.Core.Exchange.t()}
 
   @doc """
   Called when the `Freddy.Publisher` process has opened and AMQP channel and declared an exchange.
@@ -208,14 +208,14 @@ defmodule Freddy.Publisher do
   def publish(publisher, payload, routing_key \\ "", opts \\ [])
 
   def publish(%{channel: channel, exchange: exchange} = _meta, payload, routing_key, opts) do
-    Freddy.Exchange.publish(exchange, channel, payload, routing_key, opts)
+    Freddy.Core.Exchange.publish(exchange, channel, payload, routing_key, opts)
   end
 
   def publish(publisher, payload, routing_key, opts) do
     cast(publisher, {:"$publish", payload, routing_key, opts})
   end
 
-  alias Freddy.Exchange
+  alias Freddy.Core.Exchange
 
   @impl true
   def handle_connected(meta, state(config: config) = state) do
