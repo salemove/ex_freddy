@@ -28,7 +28,7 @@ defmodule Freddy.Core.Bind do
           arguments: Keyword.t()
         }
 
-  defstruct channel: nil, routing_key: "#", nowait: false, arguments: []
+  defstruct routing_key: "#", nowait: false, arguments: []
 
   @doc """
   Create binding configuration from keyword list or `Freddy.Core.Bind` structure.

@@ -297,7 +297,7 @@ calls to a client. This way you can test how your code communicates with RPC cli
 [Mox documentation](https://hexdocs.pm/mox/Mox.html) for more information about mocks and explicit contracts.
 
 If you need to test RPC client itself, you can hook into request lifecycle and use `before_request/2` callback
-to return required responses. Please note, that real connection is required for such tests.
+to return required responses. It is recommended to use fake connection in test environment:
 
 ```elixir
 defmodule MockClient do
@@ -324,7 +324,8 @@ end
 And use it in tests:
 ```elixir
 test "sends an RPC request" do
-  {:ok, client} = MockClient.start_link()
+  {:ok, conn} = Freddy.Connection.start_link(adapter: :sandbox)
+  {:ok, client} = MockClient.start_link(conn)
   MyLib.call(client: client)
 
   assert [%{routing_key: "server"}] = MockClient.flush(client)

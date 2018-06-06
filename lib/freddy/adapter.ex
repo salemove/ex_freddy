@@ -142,6 +142,10 @@ defmodule Freddy.Adapter do
     Freddy.Adapter.AMQP
   end
 
+  def get(:sandbox) do
+    Freddy.Adapter.Sandbox
+  end
+
   def get(adapter) do
     adapter
   end
