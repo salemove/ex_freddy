@@ -8,4 +8,5 @@
   "jason": {:hex, :jason, "1.0.0", "0f7cfa9bdb23fed721ec05419bcee2b2c21a77e926bce0deda029b5adc716fe2", [:mix], [{:decimal, "~> 1.0", [hex: :decimal, repo: "hexpm", optional: true]}], "hexpm"},
   "rabbit_common": {:hex, :rabbit_common, "3.6.15", "ae0b822c206e4a4d6a176a47fed79c69ac7ba1d031305e081088cbc424e3aacf", [:make, :rebar3], [{:recon, "2.3.2", [hex: :recon, repo: "hexpm", optional: false]}], "hexpm"},
   "recon": {:hex, :recon, "2.3.2", "4444c879be323b1b133eec5241cb84bd3821ea194c740d75617e106be4744318", [:rebar3], [], "hexpm"},
+  "stream_data": {:hex, :stream_data, "0.4.2", "fa86b78c88ec4eaa482c0891350fcc23f19a79059a687760ddcf8680aac2799b", [:mix], [], "hexpm"},
 }

@@ -10,6 +10,7 @@ defmodule Freddy.Adapter.AMQP.Exchange do
         exchange: exchange,
         type: to_string(type),
         passive: Keyword.get(options, :passive, false),
+        durable: Keyword.get(options, :durable, false),
         auto_delete: Keyword.get(options, :auto_delete, false),
         internal: Keyword.get(options, :internal, false),
         nowait: Keyword.get(options, :nowait, false),
