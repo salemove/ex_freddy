@@ -4,7 +4,7 @@ defmodule Freddy.Mixfile do
   def project do
     [
       app: :freddy,
-      version: "0.13.0",
+      version: "0.13.1",
       elixir: "~> 1.5",
       elixirc_paths: elixirc_paths(Mix.env()),
       build_embedded: Mix.env() == :prod,
@@ -37,7 +37,8 @@ defmodule Freddy.Mixfile do
       {:connection, "~> 1.0"},
       {:jason, "~> 1.0"},
       {:ex_doc, "~> 0.16", only: :dev},
-      {:dialyxir, "~> 0.5", only: :dev, runtime: false}
+      {:dialyxir, "~> 0.5", only: :dev, runtime: false},
+      {:stream_data, "~> 0.4", only: :test}
     ]
   end
 
