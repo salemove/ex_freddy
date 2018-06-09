@@ -56,6 +56,6 @@ defmodule Freddy.Adapter.AMQPTest do
   end
 
   defp identifier do
-    string(:alphanumeric, min_length: 1) |> map(&"freddy_test." <> &1)
+    string(:alphanumeric, min_length: 1) |> map(&("freddy_test." <> &1))
   end
 end
