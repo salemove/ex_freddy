@@ -1,5 +1,5 @@
 defmodule Freddy.Integration.RPC.ClientTest do
-  use Freddy.ConnectionCase
+  use Freddy.IntegrationCase
 
   defmodule TestClient do
     use Freddy.RPC.Client
