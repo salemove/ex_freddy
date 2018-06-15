@@ -472,7 +472,7 @@ defmodule Freddy.RPC.Server do
         {:noreply, state(state, given: new_given), timeout}
 
       {:error, new_given} ->
-        {:noreply, state(state, given: new_given)}
+        {:error, state(state, given: new_given)}
 
       {:stop, reason, new_given} ->
         {:stop, reason, state(state, given: new_given)}
@@ -580,7 +580,7 @@ defmodule Freddy.RPC.Server do
         {:noreply, state(state, given: new_given), timeout}
 
       {:stop, reason, new_given} ->
-        {:stop, reason, new_given}
+        {:stop, reason, state(state, given: new_given)}
     end
   end
 

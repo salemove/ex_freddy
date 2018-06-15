@@ -381,7 +381,7 @@ defmodule Freddy.Core.Actor do
     mod.terminate(reason, given)
   end
 
-  defp handle_mod_connected(%{mod: mod, channel: channel, given: given} = state) do
+  defp handle_mod_connected(%{mod: mod, channel: channel, channel_ref: ref, given: given} = state) do
     case mod.handle_connected(%{channel: channel}, given) do
       {:noreply, new_given} ->
         {:ok, %{state | given: new_given}}
@@ -390,9 +390,9 @@ defmodule Freddy.Core.Actor do
         {:ok, %{state | given: new_given}, timeout}
 
       {:error, new_given} ->
+        Process.demonitor(ref, [:flush])
         Channel.close(channel)
-
-        {:backoff, 0, %{state | channel: nil, given: new_given}}
+        connect(:reconnect, %{state | channel: nil, channel_ref: nil, given: new_given})
 
       {:stop, reason, new_given} ->
         {:stop, reason, %{state | given: new_given}}

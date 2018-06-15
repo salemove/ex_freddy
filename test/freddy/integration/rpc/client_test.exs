@@ -305,6 +305,7 @@ defmodule Freddy.Integration.RPC.ClientTest do
     connection: connection,
     client: client
   } do
+    assert_receive {:connected, _}, @assert_receive_interval
     Freddy.Connection.close(connection)
     assert_receive {:disconnected, _}
     assert {:error, :not_connected} = TestClient.request(client, "_server", "_payload")
