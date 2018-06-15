@@ -27,7 +27,7 @@ defmodule Freddy.RPC.Server do
         end
 
         def handle_request(payload, meta, %{handler: handler} = state) do
-          callback = &Freddy.RPC.Server.reply(self(), meta, &1)
+          callback = &Freddy.RPC.Server.reply(meta, &1)
           Task.start_link(fn -> handler.(payload, callback) end)
 
           {:noreply, state}
@@ -56,7 +56,7 @@ defmodule Freddy.RPC.Server do
   The configuration must be a `Keyword.t` that contains the same keys as `Freddy.Consumer`.
   Check out `Freddy.Consumer` documentation for the list of available configuration keys.
 
-  ## Ack mode
+  ## Acknowledgement mode
 
   By default RPC server starts in automatic acknowledgement mode. It means that all
   incoming requests will be acknowledged automatically by RabbitMQ server once delivered
@@ -431,15 +431,15 @@ defmodule Freddy.RPC.Server do
   @doc """
   Responds a request given its meta
   """
-  @spec reply(GenServer.server(), meta, response, Keyword.t()) :: :ok
-  def reply(server, request_meta, response, opts \\ []) do
-    Freddy.Consumer.cast(server, {:"$reply", request_meta, response, opts})
+  @spec reply(meta, response, Keyword.t()) :: :ok
+  def reply(%{rpc_server: server} = request_meta, response, opts \\ []) do
+    cast(server, {:"$reply", request_meta, response, opts})
   end
 
   defdelegate ack(meta, opts \\ []), to: Freddy.Consumer
-  defdelegate call(client, message, timeout \\ 5000), to: Freddy.Consumer
-  defdelegate cast(client, message), to: Freddy.Consumer
-  defdelegate stop(client, reason \\ :normal), to: GenServer
+  defdelegate call(server, message, timeout \\ 5000), to: Freddy.Consumer
+  defdelegate cast(server, message), to: Freddy.Consumer
+  defdelegate stop(server, reason \\ :normal), to: GenServer
 
   defp prepare_config(config) do
     Keyword.update(config, :consumer, [no_ack: true], &Keyword.put_new(&1, :no_ack, true))
@@ -508,6 +508,8 @@ defmodule Freddy.RPC.Server do
 
   @impl true
   def handle_message(payload, meta, state(mod: mod, given: given) = state) do
+    meta = complete(meta)
+
     case mod.decode_request(payload, meta, given) do
       {:ok, new_payload, new_given} ->
         new_payload
@@ -625,5 +627,9 @@ defmodule Freddy.RPC.Server do
       {:stop, reason, new_given} ->
         {:stop, reason, state(state, given: new_given)}
     end
+  end
+
+  defp complete(meta) do
+    Map.put(meta, :rpc_server, self())
   end
 end

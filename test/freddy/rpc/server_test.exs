@@ -340,6 +340,16 @@ defmodule Freddy.RPC.ServerTest do
       assert_responded(request, "response")
     end
 
+    @tag hooks: [handle_request: {:noreply, :_}]
+    test "reply/2 publishes response given request meta", context do
+      request = send_request(context, "request")
+
+      assert_receive {:handle_request, "request", meta}
+      Freddy.RPC.Server.reply(meta, "async response")
+
+      assert_responded(request, "async response")
+    end
+
     @tag hooks: [handle_request: {:reply, "response", [app: "test"], :_}]
     test "publishes encoded response with custom options " <>
            "if handle_request/3 returns {:reply, response, opts, state}",
