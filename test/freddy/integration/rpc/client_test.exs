@@ -95,9 +95,7 @@ defmodule Freddy.Integration.RPC.ClientTest do
 
   # simple echo server
   defmodule TestServer do
-    use Freddy.Consumer
-
-    alias Freddy.Core.Exchange
+    use Freddy.RPC.Server
 
     @config [
       exchange: [name: "freddy-rpc-test-exchange", type: :direct],
@@ -106,7 +104,7 @@ defmodule Freddy.Integration.RPC.ClientTest do
     ]
 
     def start_link(conn, pid) do
-      Freddy.Consumer.start_link(__MODULE__, conn, @config, pid)
+      Freddy.RPC.Server.start_link(__MODULE__, conn, @config, pid)
     end
 
     def handle_ready(_meta, pid) do
@@ -114,20 +112,12 @@ defmodule Freddy.Integration.RPC.ClientTest do
       {:noreply, pid}
     end
 
-    def handle_message(%{"action" => "timeout"}, _meta, pid) do
-      {:reply, :ack, pid}
+    def handle_request(%{"action" => "timeout"}, _meta, pid) do
+      {:noreply, pid}
     end
 
-    def handle_message(payload, meta, pid) do
-      reply(meta, payload)
-      {:reply, :ack, pid}
-    end
-
-    defp reply(%{reply_to: reply_queue, correlation_id: correlation_id, channel: channel}, payload) do
-      exchange = Exchange.default()
-      encoded = Jason.encode!(payload)
-      opts = [correlation_id: correlation_id, type: "response", content_type: "application/json"]
-      Exchange.publish(exchange, channel, encoded, reply_queue, opts)
+    def handle_request(payload, _meta, pid) do
+      {:reply, payload, pid}
     end
   end
 
@@ -233,7 +223,7 @@ defmodule Freddy.Integration.RPC.ClientTest do
         TestClient.request(client, "server", %{action: :timeout})
       end)
 
-    assert {:ok, {:error, :timeout}} = Task.yield(request, 120)
+    assert {:ok, {:error, :timeout}} = Task.yield(request, 200)
   end
 
   @tag server: true
@@ -245,7 +235,7 @@ defmodule Freddy.Integration.RPC.ClientTest do
         TestClient.request(client, "server", %{action: :timeout}, timeout: 100)
       end)
 
-    assert {:ok, {:error, :timeout}} = Task.yield(request, 120)
+    assert {:ok, {:error, :timeout}} = Task.yield(request, 200)
   end
 
   @tag server: true, client_options: [timeout: 100]
@@ -260,7 +250,7 @@ defmodule Freddy.Integration.RPC.ClientTest do
         )
       end)
 
-    assert {:ok, :response} = Task.yield(request, 120)
+    assert {:ok, :response} = Task.yield(request, 200)
   end
 
   test "handle_call/3 is called on Freddy.RPC.Client.call", %{client: client} do
