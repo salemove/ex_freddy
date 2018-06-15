@@ -660,7 +660,7 @@ defmodule Freddy.RPC.Client do
   end
 
   defp response_to_tuple(payload) do
-    {:error, :invalid_request, payload}
+    {:ok, payload}
   end
 
   @impl true

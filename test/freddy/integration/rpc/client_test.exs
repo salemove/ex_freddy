@@ -349,4 +349,11 @@ defmodule Freddy.Integration.RPC.ClientTest do
     assert {:error, :invalid_request, %{"result" => "error"}} =
              TestClient.request(client, "server", payload)
   end
+
+  @tag server: true
+  test "returns {:ok, payload} when server responds with arbitrary payload",
+       %{client: client} do
+    payload = "payload"
+    assert {:ok, ^payload} = TestClient.request(client, "server", payload)
+  end
 end
