@@ -210,14 +210,16 @@ defmodule NotificationsProcessor do
 end
 ```
 
-## RPC Client
+## Remote Procedure Call (RPC)
+
+### Client
 
 [RPC Client](https://www.rabbitmq.com/tutorials/tutorial-six-elixir.html) in a nutshell is a combination of
 consumer and publisher. A process publishes RPC requests into default or any other exchange and expects a
 server to publish response message to a special anonymous queue from which an RPC client process consumes.
 
 Each request contains a name of reply queue and a correlation ID - an identifier which allows RPC
-client to understand for which client the response has arrived. When server sends a reply, it publishes a
+client to understand for which request the response has arrived. When server sends a reply, it publishes a
 message into default exchange with a routing key equal to the name of the client reply queue and copies
 correlation ID from the request to the response message.
 
@@ -241,7 +243,13 @@ A diagram below illustrates an RPC request-response lifecycle:
 +----------------+           +----------------+
 ```
 
-### Example
+[`Freddy.RPC.Client`](https://hexdocs.pm/freddy/Freddy.RPC.Client.html) is also implemented as behaviour
+module, leaving you an opportunity to customize your application logic through set of callback functions.
+
+Check out [`Freddy.RPC.Client`](https://hexdocs.pm/freddy/Freddy.RPC.Client.html) documentation for
+information about available callbacks.
+
+#### Example
 
 This is an example of RPC client that publishes requests to the default exchange, logs unsuccessful requests
 and emits response time to a StatsD server.
@@ -288,7 +296,7 @@ defmodule RPC.Client do
 end
 ```
 
-### Testing
+#### Testing
 
 We recommend you to structure your code in such way that your test environment will not use real RPC client.
 
@@ -329,5 +337,90 @@ test "sends an RPC request" do
   MyLib.call(client: client)
 
   assert [%{routing_key: "server"}] = MockClient.flush(client)
+end
+```
+
+### Server
+
+Similarly to RPC client, RPC server is also a combination of consumer and publisher, but on the server side,
+the consumer is used to accept RPC request messages, whilst the publisher is used to send back response messages.
+
+Check out [`Freddy.RPC.Server`](https://hexdocs.pm/freddy/Freddy.RPC.Server.html) documentation for
+information about available callbacks.
+
+#### Message format
+
+By default server processes assume that incoming messages payload are encoded into JSON and decode
+them before processing. This behaviour can be changed by redefining the default implementation
+of `Freddy.RPC.Server.decode_request/3` callback.
+
+### Acknowledgement mode
+
+By default RPC server starts in automatic acknowledgement mode. It means that all
+incoming requests will be acknowledged automatically by RabbitMQ server once delivered
+to a client (RPC server process).
+
+If your logic requires manual acknowledgements, you should start server with configuration
+option `[consumer: [no_ack: false]]` and acknowledge messages manually using
+`Freddy.RPC.Server.ack/2` function.
+
+#### Example
+
+Below is an example of simple synchronous echo RPC server, which can process only one request at a time:
+
+```elixir
+defmodule RPC.Server do
+  use Freddy.RPC.Server
+
+  def start_link(conn) do
+    config = [
+      queue: [name: "EchoServer"]
+    ]
+
+    Freddy.RPC.Server.start_link(__MODULE__, conn, config, [])
+  end
+
+  def handle_request(payload, _meta, state) do
+    {:reply, payload, state}
+  end
+end
+```
+
+A slightly more complicated example of asynchronous RPC server, which processes every request in a separate
+process with manual acknowledgement of processed requests:
+
+```elixir
+defmodule RPC.Server do
+  use Freddy.RPC.Server
+
+  import Freddy.RPC.Server, only: [ack: 1, reply: 2]
+
+  def start_link(conn, handler) when is_function(handler, 1) do
+    config = [
+      queue: [name: "AsyncServer"],
+      qos: [prefetch_count: 100], # this is protection from DoS
+      consumer: [no_ack: false] # this enables manual acknowledgements
+    ]
+
+    Freddy.RPC.Server.start_link(__MODULE__, conn, config, handler)
+  end
+
+  @impl true
+  def init(handler) do
+    {:ok, task_sup} = Task.Supervisor.start_link()
+
+    {:ok, {task_sup, handler}}
+  end
+
+  @impl true
+  def handle_request(request, meta, {task_sup, handler}} = state) do
+    Task.Supervisor.start_child(task_sup, fn ->
+      result = handler.(request)
+      ack(meta)
+      reply(meta, result)
+    end)
+
+    {:noreply, state}
+  end
 end
 ```
