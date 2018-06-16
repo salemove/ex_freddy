@@ -433,7 +433,11 @@ defmodule Freddy.RPC.Server do
   """
   @spec reply(meta, response, Keyword.t()) :: :ok
   def reply(%{rpc_server: server} = request_meta, response, opts \\ []) do
-    cast(server, {:"$reply", request_meta, response, opts})
+    if rpc_request?(request_meta) do
+      cast(server, {:"$reply", request_meta, response, opts})
+    else
+      :ok
+    end
   end
 
   defdelegate ack(meta, opts \\ []), to: Freddy.Consumer
@@ -586,7 +590,15 @@ defmodule Freddy.RPC.Server do
     end
   end
 
-  defp send_response(response, opts, req_meta, state(mod: mod, given: given) = state) do
+  defp send_response(response, opts, req_meta, state) do
+    if rpc_request?(req_meta) do
+      do_send_response(response, opts, req_meta, state)
+    else
+      {:noreply, state}
+    end
+  end
+
+  defp do_send_response(response, opts, req_meta, state(mod: mod, given: given) = state) do
     case mod.encode_response(response, opts, given) do
       {:reply, payload, new_given} ->
         publish_response(req_meta, payload, opts)
@@ -631,5 +643,9 @@ defmodule Freddy.RPC.Server do
 
   defp complete(meta) do
     Map.put(meta, :rpc_server, self())
+  end
+
+  defp rpc_request?(meta) when is_map(meta) do
+    is_binary(meta[:reply_to]) && is_binary(meta[:correlation_id])
   end
 end

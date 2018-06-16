@@ -388,17 +388,30 @@ defmodule Freddy.RPC.ServerTest do
       assert_responded(request, "response", app: "test")
     end
 
+    test "doesn't publish response if request is missing :reply_to or :correlation_id", context do
+      send(context.server, {:deliver, "request1", %{correlation_id: "correlation_id"}})
+      send(context.server, {:deliver, "request2", %{reply_to: "reply-queue"}})
+      send(context.server, {:deliver, "request3", %{}})
+
+      assert_receive {:handle_request, "request1", _}
+      assert_receive {:handle_request, "request2", _}
+      assert_receive {:handle_request, "request3", _}
+
+      refute_receive {:encode_response, _, _}
+      refute_responded(context)
+    end
+
     defp send_request(%{connection: conn, server: server}, payload) do
       meta = %{reply_to: "reply-queue", correlation_id: "correlation_id"}
       send(server, {:deliver, payload, meta})
 
       meta
       |> Map.put(:server, server)
-      |> Map.put(:conn, conn)
+      |> Map.put(:connection, conn)
     end
 
     defp assert_responded(
-           %{conn: conn, server: server, reply_to: reply_to, correlation_id: correlation_id},
+           %{connection: conn, server: server, reply_to: reply_to, correlation_id: correlation_id},
            response,
            opts \\ []
          ) do
@@ -413,7 +426,7 @@ defmodule Freddy.RPC.ServerTest do
       end
     end
 
-    defp refute_responded(%{conn: conn, server: server}) do
+    defp refute_responded(%{connection: conn, server: server}) do
       # synchronize state
       _ = :sys.get_state(server)
       assert [] = history(conn, :publish)
