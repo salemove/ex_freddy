@@ -113,10 +113,10 @@ defmodule Freddy.Connection do
       ) do
     try do
       case Channel.open(adapter, connection) do
-        {:ok, chan} ->
+        {:ok, %{chan: pid} = chan} ->
           monitor_ref = Process.monitor(from)
           channel_ref = Channel.monitor(chan)
-          channels = MultikeyMap.put(channels, [monitor_ref, channel_ref], chan)
+          channels = MultikeyMap.put(channels, [monitor_ref, channel_ref, pid], chan)
 
           {:reply, {:ok, chan}, state(state, channels: channels)}
 
@@ -148,8 +148,14 @@ defmodule Freddy.Connection do
     {:disconnect, {:error, reason}, state}
   end
 
-  def handle_info({:EXIT, _process, reason}, state) do
-    {:stop, reason, state}
+  def handle_info({:EXIT, pid, reason}, state(channels: channels) = state) do
+    case MultikeyMap.pop(channels, pid) do
+      {nil, ^channels} ->
+        {:stop, reason, state}
+
+      {_channel, new_channels} ->
+        {:noreply, state(state, channels: new_channels)}
+    end
   end
 
   def handle_info({:DOWN, ref, _, _pid, _reason}, state) do

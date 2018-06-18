@@ -19,8 +19,8 @@ defmodule Freddy.Adapter.Sandbox.Connection do
     GenServer.call(connection, {:register, event, args})
   end
 
-  def history(connection, type) do
-    GenServer.call(connection, {:history, type})
+  def history(connection, type, flush?) do
+    GenServer.call(connection, {:history, type, flush?})
   end
 
   @impl true
@@ -33,17 +33,28 @@ defmodule Freddy.Adapter.Sandbox.Connection do
     {:reply, :ok, [{event, args} | history]}
   end
 
-  def handle_call({:history, :all}, _from, history) do
-    {:reply, Enum.reverse(history), history}
+  def handle_call({:history, :all, flush?}, _from, history) do
+    {:reply, Enum.reverse(history), flush(history, flush?)}
   end
 
-  def handle_call({:history, type}, _from, history) do
+  def handle_call({:history, types, flush?}, _from, history) do
     matching_events =
-      Enum.reduce(history, [], fn
-        {^type, _} = event, acc -> [event | acc]
-        _, acc -> acc
+      Enum.reduce(history, [], fn {type, _} = event, acc ->
+        if type in List.wrap(types) do
+          [event | acc]
+        else
+          acc
+        end
       end)
 
-    {:reply, matching_events, history}
+    {:reply, matching_events, flush(history, flush?)}
+  end
+
+  defp flush(history, flag) do
+    if flag do
+      []
+    else
+      history
+    end
   end
 end

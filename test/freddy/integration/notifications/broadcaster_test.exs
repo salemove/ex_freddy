@@ -1,5 +1,5 @@
 defmodule Freddy.Integration.Notifications.BroadcasterTest do
-  use Freddy.ConnectionCase
+  use Freddy.IntegrationCase
 
   defmodule TestBroadcaster do
     use Freddy.Notifications.Broadcaster

@@ -25,9 +25,13 @@ defmodule Freddy.Adapter.Sandbox do
   Get history of events from connection. Events can be filtered by type,
   for example, if one wants to get only history of messages, published
   over given connection, he should call `history(connection, :publish)`.
+  Filter by multiple event types is supported.
+
+  Passing `true` as a third argument will erase entire history after
+  returning it.
   """
-  def history(connection, events \\ :all) do
-    Connection.history(connection, events)
+  def history(connection, events \\ :all, flush? \\ false) do
+    Connection.history(connection, events, flush?)
   end
 
   @impl true

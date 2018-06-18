@@ -1,5 +1,5 @@
 defmodule Freddy.Integration.ConsumerTest do
-  use Freddy.ConnectionCase
+  use Freddy.IntegrationCase
 
   defmodule TestConsumer do
     use Freddy.Consumer

@@ -1,5 +1,5 @@
 defmodule Freddy.Integration.PublisherTest do
-  use Freddy.ConnectionCase
+  use Freddy.IntegrationCase
 
   defmodule TestPublisher do
     use Freddy.Publisher
