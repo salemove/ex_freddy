@@ -4,6 +4,8 @@ defmodule Freddy.Integration.ConnectionTest do
   alias Freddy.Connection
   alias Freddy.Core.Channel
 
+  import Freddy.Adapter.AMQP.Core
+
   # This test assumes that RabbitMQ server is running with default settings on localhost
 
   test "establishes connection to AMQP server" do
@@ -75,5 +77,19 @@ defmodule Freddy.Integration.ConnectionTest do
     Process.exit(pid, :restart)
 
     assert_receive {:DOWN, ^ref, :process, ^pid, :restart}
+  end
+
+  test "establishes connection to secondary server if primary server is unavailable" do
+    {:ok, pid} =
+      Connection.start_link([
+        [host: "127.0.0.2", connection_timeout: 500, port: 6389],
+        [host: "127.0.0.1"]
+      ])
+
+    assert {:ok, conn} = Connection.get_connection(pid)
+    assert is_pid(conn)
+    assert [amqp_params: params] = :amqp_connection.info(conn, [:amqp_params])
+    amqp_params_network(host: host) = params
+    assert host == '127.0.0.1'
   end
 end
