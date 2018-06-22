@@ -60,6 +60,24 @@ We recommend to start `Freddy.Connection` and all your publishers and consumers 
 supervision tree. Ideally connection and dependent processes should be grouped in one supervisor
 with restart strategy `:rest_for_one`.
 
+## Connection to multiple hosts
+
+It is possible to leverage H/A RabbitMQ setup by providing multiple connection options when
+starting a `Freddy.Connection` process. Don't forget to specify `connection_timeout`, or your
+process may stuck in infinite wait loop.
+
+```elixir
+host1 = [host: "10.0.100.1", connection_timeout: 1000]
+host2 = [host: "10.0.100.2", connection_timeout: 1000]
+host3 = [host: "10.0.100.3", connection_timeout: 1000]
+{:ok, conn} = Freddy.Connection.start_link([host1, host2, host3])
+```
+
+`Freddy.Connection` will establish connection to one of the specified hosts, prioritizing them
+by order of appearing in the list. If it can't establish connection to the first host, it will
+immediately attempt to establish connection to second, and so on. If none of the hosts are responding,
+`Freddy.Connection` will wait a second and attempt to connect to all hosts again.
+
 ## Publishers
 
 Freddy provides a behaviour module [`Freddy.Publisher`](https://hexdocs.pm/freddy/Freddy.Publisher.html)

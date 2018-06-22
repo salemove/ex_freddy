@@ -15,10 +15,17 @@ defmodule Freddy.Connection do
   use Connection
 
   @doc """
-  Start a new AMQP connection. See `AMQP.Connection.open/1` for supported
-  connection options.
+  Start a new AMQP connection.
+
+  `connection_opts` can be supplied either as keyword list - in this case
+  connection will be established to one RabbitMQ server - or as a list of
+  keyword list - in this case `Freddy.Connection` will first attempt to
+  establish connection to the host specified by the first element of the list,
+  then to the second, if the first one has failed, and so on.
+
+  See `AMQP.Connection.open/1` for the information about supported connection options.
   """
-  @spec start_link(Keyword.t(), GenServer.options()) :: GenServer.on_start()
+  @spec start_link(Keyword.t() | [Keyword.t(), ...], GenServer.options()) :: GenServer.on_start()
   def start_link(connection_opts \\ [], gen_server_opts \\ []) do
     Connection.start_link(__MODULE__, connection_opts, gen_server_opts)
   end
@@ -69,7 +76,7 @@ defmodule Freddy.Connection do
 
   defrecordp :state,
     adapter: nil,
-    opts: nil,
+    hosts: nil,
     connection: nil,
     channels: MultikeyMap.new()
 
@@ -77,18 +84,44 @@ defmodule Freddy.Connection do
   def init(opts) do
     Process.flag(:trap_exit, true)
     {adapter, opts} = Keyword.pop(opts, :adapter, :amqp)
-    {:connect, :init, state(opts: opts, adapter: Adapter.get(adapter))}
+    {:connect, :init, state(hosts: prepare_connection_hosts(opts), adapter: Adapter.get(adapter))}
+  end
+
+  defp prepare_connection_hosts(opts) when is_list(opts) do
+    if Keyword.keyword?(opts) do
+      [opts]
+    else
+      if Enum.all?(opts, &Keyword.keyword?/1) do
+        opts
+      else
+        raise "Connection options must be supplied either as keywords or as a list of keywords"
+      end
+    end
   end
 
   @impl true
-  def connect(_info, state(adapter: adapter, opts: opts) = state) do
-    case adapter.open_connection(opts) do
+  def connect(_info, state(adapter: adapter, hosts: hosts) = state) do
+    case do_connect(hosts, adapter, nil) do
       {:ok, connection} ->
         adapter.link_connection(connection)
         {:ok, state(state, connection: connection)}
 
       _error ->
         {:backoff, @reconnect_interval, state}
+    end
+  end
+
+  defp do_connect([], _adapter, acc) do
+    acc
+  end
+
+  defp do_connect([host_opts | rest], adapter, _acc) do
+    case adapter.open_connection(host_opts) do
+      {:ok, connection} ->
+        {:ok, connection}
+
+      error ->
+        do_connect(rest, adapter, error)
     end
   end
 
