@@ -138,7 +138,7 @@ defmodule Freddy.Integration.RPC.ClientTest do
         assert_receive {:ready, _}, @assert_receive_interval
 
         {:ok, server} = TestServer.start_link(connection, self())
-        assert_receive :server_ready
+        assert_receive :server_ready, @assert_receive_interval
 
         Map.put(context, :server, server)
       else
@@ -286,7 +286,7 @@ defmodule Freddy.Integration.RPC.ClientTest do
     Process.exit(conn, {:shutdown, {:server_initiated_close, 320, 'Good bye'}})
     assert_receive {:DOWN, ^ref, :process, _, _}
 
-    assert_receive {:disconnected, :shutdown}
+    assert_receive {:disconnected, :shutdown}, @assert_receive_interval
     refute_receive :init, @assert_receive_interval
     assert_receive {:ready, _}, @assert_receive_interval
   end
@@ -297,7 +297,7 @@ defmodule Freddy.Integration.RPC.ClientTest do
   } do
     assert_receive {:connected, _}, @assert_receive_interval
     Freddy.Connection.close(connection)
-    assert_receive {:disconnected, _}
+    assert_receive {:disconnected, _}, @assert_receive_interval
     assert {:error, :not_connected} = TestClient.request(client, "_server", "_payload")
   end
 
