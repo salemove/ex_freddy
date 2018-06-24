@@ -3,14 +3,73 @@ defmodule Freddy.Connection do
   Stable AMQP connection.
   """
 
+  alias Freddy.Utils.Backoff
   alias Freddy.Utils.MultikeyMap
   alias Freddy.Adapter
   alias Freddy.Core.Channel
 
-  @type connection :: GenServer.server()
+  @params_docs [
+    adapter: """
+    Freddy adapter. Can be any module, but also can be passed as an alias `:amqp` or `:sandox`
+    """,
+    backoff: """
+    Backoff can be specified either as a 1-arity function that accepts
+    attempt number (starting from `1`) , or as a tuple `{module, function, arguments}`
+    (in this case attempt number will appended to the arguments) or as a
+    backoff config.
+    """,
+    host: "The hostname of the broker (defaults to \"localhost\")",
+    port: "The port the broker is listening on (defaults to `5672`)",
+    username: "The name of a user registered with the broker (defaults to \"guest\")",
+    password: "The password of user (defaults to \"guest\")",
+    virtual_host: "The name of a virtual host in the broker (defaults to \"/\")",
+    channel_max: "The channel_max handshake parameter (defaults to `0`)",
+    frame_max: "The frame_max handshake parameter (defaults to `0`)",
+    heartbeat: "The hearbeat interval in seconds (defaults to `0` - turned off)",
+    connection_timeout: "The connection timeout in milliseconds (defaults to `infinity`)",
+    ssl_options: "Enable SSL by setting the location to cert files (defaults to `none`)",
+    client_properties:
+      "A list of extra client properties to be sent to the server, defaults to `[]`",
+    socket_options: """
+    Extra socket options. These are appended to the default options.
+    See `:inet.setopts/2` and `:gen_tcp.connect/4` for descriptions of the available options.
+    """
+  ]
 
-  # Hard coded for now, can make configurable later
-  @reconnect_interval 1000
+  @options_doc @params_docs
+               |> Enum.map(fn {param, value} -> "  * `:#{param}` - #{value}" end)
+               |> Enum.join("\n")
+
+  @type connection :: GenServer.server()
+  @type connection_spec :: connection_params | connection_uri
+  @type connection_uri :: String.t()
+  @typedoc """
+  Keyword list of AMQP connection params.
+
+  ## Options
+
+  #{@options_doc}
+  """
+  @type connection_params :: [
+          adapter: atom,
+          backoff: Backoff.spec(),
+          host: String.t(),
+          port: integer,
+          username: String.t(),
+          password: String.t(),
+          virtual_host: String.t(),
+          channel_max: non_neg_integer,
+          frame_max: non_neg_integer,
+          heartbeat: non_neg_integer,
+          connection_timeout: timeout,
+          client_properties: [{String.t(), atom, String.t()}],
+          ssl_options: term,
+          socket_options: [any],
+          auth_mechanisms: [function]
+        ]
+
+  @typedoc @params_docs[:adapter]
+  @type adapter :: :amqp | :sandbox | module
 
   use Connection
 
@@ -23,9 +82,26 @@ defmodule Freddy.Connection do
   establish connection to the host specified by the first element of the list,
   then to the second, if the first one has failed, and so on.
 
-  See `AMQP.Connection.open/1` for the information about supported connection options.
+  ## Options
+
+  #{@options_doc}
+
+  ## Backoff configuration
+
+  Backoff config specifies how intervals should be calculated between reconnection attempts.
+
+  ### Available options
+
+    * `:type` - should be `:constant`, `:normal` or `:jitter`. When type is set to `:constant`,
+       interval between all reconnection attempts is the same, defined by option `:start`. When
+       type is set to `:normal`, intervals between reconnection attempts are incremented exponentially.
+       When type is set to `:jitter`, intervals are also incremented exponentially, but with
+       randomness or jitter (see `:backoff.rand_increment/2`). Defaults to `:jitter`.
+    * `:start` - an initial backoff interval in milliseconds. Defaults to `1000`.
+    * `:max` - specifies maximum backoff interval in milliseconds. Defaults to `10000`.
   """
-  @spec start_link(Keyword.t() | [Keyword.t(), ...], GenServer.options()) :: GenServer.on_start()
+  @spec start_link(connection_spec | [connection_spec, ...], GenServer.options()) ::
+          GenServer.on_start()
   def start_link(connection_opts \\ [], gen_server_opts \\ []) do
     Connection.start_link(__MODULE__, connection_opts, gen_server_opts)
   end
@@ -78,13 +154,24 @@ defmodule Freddy.Connection do
     adapter: nil,
     hosts: nil,
     connection: nil,
-    channels: MultikeyMap.new()
+    channels: MultikeyMap.new(),
+    backoff: Backoff.new([])
 
   @impl true
   def init(opts) do
     Process.flag(:trap_exit, true)
+
     {adapter, opts} = Keyword.pop(opts, :adapter, :amqp)
-    {:connect, :init, state(hosts: prepare_connection_hosts(opts), adapter: Adapter.get(adapter))}
+    {backoff, opts} = Keyword.pop(opts, :backoff, [])
+
+    state =
+      state(
+        hosts: prepare_connection_hosts(opts),
+        adapter: Adapter.get(adapter),
+        backoff: Backoff.new(backoff)
+      )
+
+    {:connect, :init, state}
   end
 
   defp prepare_connection_hosts(opts) when is_list(opts) do
@@ -100,14 +187,16 @@ defmodule Freddy.Connection do
   end
 
   @impl true
-  def connect(_info, state(adapter: adapter, hosts: hosts) = state) do
+  def connect(_info, state(adapter: adapter, hosts: hosts, backoff: backoff) = state) do
     case do_connect(hosts, adapter, nil) do
       {:ok, connection} ->
         adapter.link_connection(connection)
-        {:ok, state(state, connection: connection)}
+        new_backoff = Backoff.succeed(backoff)
+        {:ok, state(state, connection: connection, backoff: new_backoff)}
 
       _error ->
-        {:backoff, @reconnect_interval, state}
+        {interval, new_backoff} = Backoff.fail(backoff)
+        {:backoff, interval, state(state, backoff: new_backoff)}
     end
   end
 
