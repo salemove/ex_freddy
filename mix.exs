@@ -36,6 +36,7 @@ defmodule Freddy.Mixfile do
       {:amqp, "~> 0.3"},
       {:connection, "~> 1.0"},
       {:jason, "~> 1.0"},
+      {:backoff, "~> 1.1"},
       {:ex_doc, "~> 0.16", only: :dev},
       {:dialyxir, "~> 0.5", only: :dev, runtime: false},
       {:stream_data, "~> 0.4", only: :test}
