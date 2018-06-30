@@ -1,8 +1,25 @@
 defmodule Freddy.Adapter.AMQP.Connection do
   @moduledoc false
 
-  def open(options) do
-    case AMQP.Connection.open(options) do
+  @default_options [
+    heartbeat: 10,
+    connection_timeout: 5000
+  ]
+
+  def open(options)
+
+  def open(options) when is_list(options) do
+    @default_options
+    |> Keyword.merge(options)
+    |> do_open()
+  end
+
+  def open(uri) when is_binary(uri) do
+    do_open(uri)
+  end
+
+  defp do_open(options_or_uri) do
+    case AMQP.Connection.open(options_or_uri) do
       {:ok, %{pid: pid}} -> {:ok, pid}
       {:error, _reason} = result -> result
     end
