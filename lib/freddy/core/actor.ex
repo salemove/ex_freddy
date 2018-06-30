@@ -256,6 +256,7 @@ defmodule Freddy.Core.Actor do
   alias Freddy.Core.Channel
 
   @reconnection_interval 1000
+  @channel_open_timeout 3000
 
   @doc false
   def start_link(mod, connection, initial, opts \\ []) do
@@ -293,7 +294,7 @@ defmodule Freddy.Core.Actor do
 
   @impl true
   def connect(_info, %{connection: connection} = state) do
-    case Freddy.Connection.open_channel(connection) do
+    case Freddy.Connection.open_channel(connection, @channel_open_timeout) do
       {:ok, channel} ->
         ref = Channel.monitor(channel)
 
@@ -305,6 +306,9 @@ defmodule Freddy.Core.Actor do
       _error ->
         {:backoff, @reconnection_interval, state}
     end
+  catch
+    :exit, {:timeout, _} ->
+      {:backoff, @reconnection_interval, state}
   end
 
   @impl true

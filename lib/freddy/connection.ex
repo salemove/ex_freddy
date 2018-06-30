@@ -124,9 +124,9 @@ defmodule Freddy.Connection do
   @doc """
   Opens a new AMQP channel
   """
-  @spec open_channel(connection) :: {:ok, Channel.t()} | {:error, reason :: term}
-  def open_channel(connection) do
-    Connection.call(connection, :open_channel)
+  @spec open_channel(connection, timeout) :: {:ok, Channel.t()} | {:error, reason :: term}
+  def open_channel(connection, timeout \\ 5000) do
+    Connection.call(connection, :open_channel, timeout)
   end
 
   @doc """
