@@ -11,24 +11,22 @@ shared: &shared
 
     - restore_cache:
         keys:
-          - v1-mix-cache-{{ .Branch }}-{{ .Environment.ELIXIR_VERSION }}-{{ checksum "mix.lock" }}
+          - v1-mix-cache-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "mix.lock" }}
     - restore_cache:
         keys:
-          - v1-build-cache-{{ .Branch }}-{{ .Environment.ELIXIR_VERSION }}
+          - v1-build-cache-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}
     - run: mix do deps.get, compile
     - save_cache:
-        key: v1-mix-cache-{{ .Branch }}-{{ .Environment.ELIXIR_VERSION }}-{{ checksum "mix.lock" }}
+        key: v1-mix-cache-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "mix.lock" }}
         paths: "deps"
     - save_cache:
-        key: v1-build-cache-{{ .Branch }}-{{ .Environment.ELIXIR_VERSION }}
+        key: v1-build-cache-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}
         paths: "_build"
 
     - run: mix test
 
 jobs:
   "elixir-1.5":
-    environment:
-      ELIXIR_VERSION: "1.5"
     docker:
       - image: circleci/elixir:1.5
         environment:
@@ -38,8 +36,6 @@ jobs:
     <<: *shared
 
   "elixir-1.6":
-    environment:
-      ELIXIR_VERSION: "1.6"
     docker:
       - image: circleci/elixir:1.6
         environment:
