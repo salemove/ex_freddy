@@ -1,14 +1,16 @@
 defmodule Freddy.Notifications.Broadcaster do
-  @moduledoc """
-  `Freddy.Publisher` special case.
+  @moduledoc false
 
-  This module allows to publish messages to `"freddy-topic"` exchange.
+  defmacro __using__(opts \\ []) do
+    warn? = Keyword.get(opts, :warn, true)
 
-  See documentation for `Freddy.Publisher`.
-  """
-
-  defmacro __using__(_opts \\ []) do
     quote location: :keep do
+      if unquote(warn?) do
+        IO.warn(
+          "#{unquote(__MODULE__)} will be removed in Freddy 1.0, use Freddy.Publisher instead"
+        )
+      end
+
       use Freddy.Publisher
 
       defdelegate broadcast(broadcaster, routing_key, payload, opts \\ []),

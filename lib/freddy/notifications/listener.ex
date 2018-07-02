@@ -1,29 +1,14 @@
 defmodule Freddy.Notifications.Listener do
-  @moduledoc """
-  `Freddy.Consumer` special case. Listens for notifications from `"freddy-topic"` exchange.
+  @moduledoc false
 
-  Like in `Freddy.Consumer`, you have to specify queue and routing keys to bind to.
+  defmacro __using__(opts \\ []) do
+    warn? = Keyword.get(opts, :warn, true)
 
-  ## Example
-
-      defmodule Notifications.Listener do
-        use Freddy.Notifications.Listener
-
-        @config [
-          queue: [name: "myapp-notifications", opts: [auto_delete: true]],
-          routing_keys: ["broadcast.*"]
-        ]
-
-        def start_link(conn, initial) do
-          Freddy.Notifications.Listener.start_link(__MODULE__, conn, @config, initial)
-        end
+    quote location: :keep do
+      if unquote(warn?) do
+        IO.warn("#{unquote(__MODULE__)} will be removed in Freddy 1.0, use Freddy.Consumer instead")
       end
 
-  See also documentation for `Freddy.Consumer`
-  """
-
-  defmacro __using__(_opts \\ []) do
-    quote location: :keep do
       use Freddy.Consumer
     end
   end

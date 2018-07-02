@@ -2,7 +2,7 @@ defmodule Freddy.Integration.Notifications.ListenerTest do
   use Freddy.IntegrationCase
 
   defmodule TestBroadcaster do
-    use Freddy.Notifications.Broadcaster
+    use Freddy.Notifications.Broadcaster, warn: false
 
     def start_link(conn) do
       Freddy.Notifications.Broadcaster.start_link(__MODULE__, conn, nil)
@@ -10,7 +10,7 @@ defmodule Freddy.Integration.Notifications.ListenerTest do
   end
 
   defmodule TestListener do
-    use Freddy.Notifications.Listener
+    use Freddy.Notifications.Listener, warn: false
 
     @config [
       queue: [opts: [auto_delete: true]],
