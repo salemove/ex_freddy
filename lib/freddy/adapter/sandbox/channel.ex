@@ -6,7 +6,10 @@ defmodule Freddy.Adapter.Sandbox.Channel do
   alias Freddy.Adapter.Sandbox.Connection
 
   def open(connection) do
-    GenServer.start_link(__MODULE__, connection)
+    case Connection.get_on_open_channel(connection) do
+      :ok -> GenServer.start_link(__MODULE__, connection)
+      other -> other
+    end
   end
 
   def monitor(channel) do
