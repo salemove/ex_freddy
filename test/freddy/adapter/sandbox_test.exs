@@ -74,4 +74,13 @@ defmodule Freddy.Adapter.SandboxTest do
 
     assert history(conn) != history(conn, :publish)
   end
+
+  test "allows configuring a response for `open_channel/1`", %{conn: conn} do
+    assert :ok = on_open_channel(conn, {:error, :bad_connection})
+    assert {:error, :bad_connection} = open_channel(conn)
+
+    assert :ok = on_open_channel(conn, :ok)
+    assert {:ok, chan} = open_channel(conn)
+    assert is_pid(chan)
+  end
 end

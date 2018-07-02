@@ -352,6 +352,10 @@ defmodule Freddy.Consumer do
     end
   end
 
+  def handle_info(message, state) do
+    super(message, state)
+  end
+
   defp handle_mod_ready(meta, state(mod: mod, given: given) = state) do
     case mod.handle_ready(complete(meta, state), given) do
       {:noreply, new_given} ->

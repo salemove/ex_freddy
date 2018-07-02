@@ -34,6 +34,14 @@ defmodule Freddy.Adapter.Sandbox do
     Connection.history(connection, events, flush?)
   end
 
+  @doc """
+  Sets a response for `open_channel/1` function. If set to `:ok`, the function
+  will return a tuple `{:ok, channel_pid}` (default behaviour).
+  """
+  def on_open_channel(connection, response) do
+    Connection.set_on_open_channel(connection, response)
+  end
+
   @impl true
   defdelegate open_connection(opts), to: Connection, as: :open
 
