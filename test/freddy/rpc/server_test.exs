@@ -449,7 +449,19 @@ defmodule Freddy.RPC.ServerTest do
   end
 
   describe "handle_info/2" do
+    alias Freddy.Connection
+    alias Freddy.Adapter.Sandbox, as: Adapter
+
     test "called on arbitrary message", %{connection: conn} do
+      {:ok, server} = TestServer.start_link(conn, self())
+      send(server, :message)
+      assert_receive {:info, :message}
+    end
+
+    test "called on arbitrary message without established connection", %{connection: conn} do
+      {:ok, pid} = Connection.get_connection(conn)
+      Adapter.on_open_channel(pid, {:error, :no_connection})
+
       {:ok, server} = TestServer.start_link(conn, self())
       send(server, :message)
       assert_receive {:info, :message}

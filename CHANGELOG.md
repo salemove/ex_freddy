@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Fixed
 - Fix crashing actors when connection couldn't be established in 5 seconds (ebc12c3)
+- Fix `FunctionClauseError` in `Freddy.Consumer` in `handle_info/2` callback (#24)
 
 ## [0.13.1] - 2018-06-08
 
