@@ -44,9 +44,19 @@ jobs:
 
     <<: *shared
 
+  "elixir-1.7":
+    docker:
+    - image: circleci/elixir:1.7
+      environment:
+        MIX_ENV: test
+    - image: rabbitmq:3.6-alpine
+
+    <<: *shared
+
 workflows:
   version: 2
   build:
     jobs:
       - "elixir-1.5"
       - "elixir-1.6"
+      - "elixir-1.7"
