@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [0.15.0] (In progress)
 
+### Fixed
+- Fix incorrect example in `Freddy.Adapter.Sandbox` documentation (#26)
+
 ## [0.14.0] (2018-07-17)
 
 ### Added

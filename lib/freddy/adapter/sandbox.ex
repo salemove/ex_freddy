@@ -5,14 +5,18 @@ defmodule Freddy.Adapter.Sandbox do
 
   ## Example
 
-      iex> alias #{__MODULE__}
-      iex> alias Freddy.Connection
-      iex> alias Freddy.Core.Exchange
+      iex> alias Freddy.{Connection, Core.Exchange, Adapter.Sandbox}
       iex> {:ok, conn} = Connection.start_link(adapter: :sandbox)
       iex> {:ok, channel} = Connection.open_channel(conn)
       iex> :ok = Exchange.declare(%Exchange{name: "test"}, channel)
-      iex> Sandbox.history(conn)
-      [{:open_channel, [conn]}, {:declare_exchange, [channel, "test", :direct, []]}]
+      iex> {:ok, pid} = Connection.get_connection(conn)
+      iex> Sandbox.history(pid)
+      [
+        link_connection: [#PID<0.226.0>],
+        open_channel: [#PID<0.226.0>],
+        monitor_channel: [#PID<0.228.0>],
+        declare_exchange: [#PID<0.228.0>, "test", :direct, []]
+      ]
   """
 
   @behaviour Freddy.Adapter
