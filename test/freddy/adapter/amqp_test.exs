@@ -55,7 +55,44 @@ defmodule Freddy.Adapter.AMQPTest do
     end
   end
 
+  describe "delete_queue/3" do
+    property "can delete a queue", %{freddy: freddy, amqp: amqp} do
+      check all name <- identifier(),
+                if_unused? <- boolean(),
+                if_empty? <- boolean(),
+                max_runs: 10 do
+        options = [
+          if_unused: if_unused?,
+          if_empty: if_empty?
+        ]
+
+        # With the check all property testing the setup block is only run once
+        # The channel will get shutdown during this test so we need to ensure
+        # it is started.
+        amqp = ensure_amqp_channel(amqp)
+
+        # Create the queue in different library
+        assert {:ok, %{queue: ^name}} = AMQP.Queue.declare(amqp, name)
+        # Ensure we can delete it
+        assert {:ok, %{message_count: 0}} = delete_queue(freddy, name, options)
+        # Catch the exit with a 404 that indicates the queue doesn't exist
+        # and actually got deleted
+        assert {{:shutdown, {:server_initiated_close, 404, _}}, _} =
+                 catch_exit(AMQP.Queue.declare(amqp, name, passive: true))
+      end
+    end
+  end
+
   defp identifier do
     string(:alphanumeric, min_length: 1) |> map(&("freddy_test." <> &1))
+  end
+
+  defp ensure_amqp_channel(amqp) do
+    if Process.alive?(amqp.pid) do
+      amqp
+    else
+      {:ok, amqp} = AMQP.Channel.open(amqp.conn)
+      amqp
+    end
   end
 end
