@@ -88,7 +88,7 @@ defmodule Freddy.Adapter do
   @doc """
   Deletes the given queue
   """
-  @callback delete_queue(channel, queue_name, options) :: :ok | {:error, error}
+  @callback delete_queue(channel, queue_name, options) :: {:ok, meta} | {:error, error}
 
   ## Basic
 
