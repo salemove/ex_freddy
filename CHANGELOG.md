@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [0.15.0] (In progress)
 
+### Added
+- Add `delete_queue` functionality to AMQP and Sandox adapters (#28)
+
 ### Fixed
 - Fix incorrect example in `Freddy.Adapter.Sandbox` documentation (#26)
 
