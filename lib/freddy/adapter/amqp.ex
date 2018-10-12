@@ -46,6 +46,9 @@ defmodule Freddy.Adapter.AMQP do
   @impl true
   defdelegate bind_queue(channel, queue, exchange, options), to: Queue, as: :bind
 
+  @impl true
+  defdelegate delete_queue(channel, queue, options), to: Queue, as: :delete
+
   # Basic
 
   @impl true

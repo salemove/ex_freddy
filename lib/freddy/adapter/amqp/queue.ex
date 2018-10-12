@@ -37,4 +37,19 @@ defmodule Freddy.Adapter.AMQP.Queue do
       error -> error
     end
   end
+
+  def delete(channel, queue, options) do
+    queue_delete =
+      queue_delete(
+        queue: queue,
+        if_unused: Keyword.get(options, :if_unused, false),
+        if_empty: Keyword.get(options, :if_empty, false),
+        nowait: Keyword.get(options, :no_wait, false)
+      )
+
+    case Channel.call(channel, queue_delete) do
+      queue_delete_ok(message_count: message_count) -> {:ok, %{message_count: message_count}}
+      error -> error
+    end
+  end
 end

@@ -21,6 +21,14 @@ defmodule Freddy.Adapter.AMQP.Core do
             :"queue.bind_ok",
             extract(:"queue.bind_ok", from_lib: "rabbit_common/include/rabbit_framing.hrl")
 
+  defrecord :queue_delete,
+            :"queue.delete",
+            extract(:"queue.delete", from_lib: "rabbit_common/include/rabbit_framing.hrl")
+
+  defrecord :queue_delete_ok,
+            :"queue.delete_ok",
+            extract(:"queue.delete_ok", from_lib: "rabbit_common/include/rabbit_framing.hrl")
+
   defrecord :basic_ack,
             :"basic.ack",
             extract(:"basic.ack", from_lib: "rabbit_common/include/rabbit_framing.hrl")

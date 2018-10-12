@@ -119,6 +119,13 @@ defmodule Freddy.Adapter.Sandbox do
   end
 
   @impl true
+  def delete_queue(channel, queue, options) do
+    Channel.register(channel, :delete_queue, [channel, queue, options])
+    # For the sandbox always return 0 messages
+    {:ok, %{message_count: 0}}
+  end
+
+  @impl true
   def publish(channel, exchange, routing_key, payload, opts) do
     register(channel, :publish, [channel, exchange, routing_key, payload, opts])
   end
