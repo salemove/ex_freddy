@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Fixed
 - Fix incorrect example in `Freddy.Adapter.Sandbox` documentation (#26)
 
+### Removed
+- Remove `amqp` runtime dependency. Users must manually include this library
+  into `mix.exs` if they still want to use it directly (#29, #30) 
+
 ## [0.14.0] (2018-07-17)
 
 ### Added

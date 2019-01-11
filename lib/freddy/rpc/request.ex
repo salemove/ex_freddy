@@ -65,7 +65,7 @@ defmodule Freddy.RPC.Request do
   `get_option/3` and `remove_option/2`. Applications SHOULD NOT modify this
   field directly.
 
-  See `AMQP.Basic.publish/5` for available options.
+  See `Freddy.Publisher.publish/4` for available options.
   """
   @type options :: Keyword.t()
 

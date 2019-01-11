@@ -198,6 +198,27 @@ defmodule Freddy.Publisher do
 
   When publishing from within the publisher process, the connection_info can be
   obtained from `c:handle_connected/2` callback.
+
+  ## Options
+
+    * `:mandatory` - If set, returns an error if the broker can't route the message
+      to a queue (default `false`);
+    * `:immediate` - If set, returns an error if the broker can't deliver te message
+      to a consumer immediately (default `false`);
+    * `:content_type` - MIME Content type;
+    * `:content_encoding` - MIME Content encoding;
+    * `:headers` - Message headers. Can be used with headers Exchanges;
+    * `:persistent` - If set, uses persistent delivery mode. Messages marked as
+      `persistent` that are delivered to `durable` queues will be logged to disk;
+    * `:correlation_id` - application correlation identifier;
+    * `:priority` - message priority, ranging from 0 to 9;
+    * `:reply_to` - name of the reply queue;
+    * `:expiration` - how long the message is valid (in milliseconds);
+    * `:message_id` - message identifier;
+    * `:timestamp` - timestamp associated with this message (epoch time);
+    * `:type` - message type as a string;
+    * `:user_id` - creating user ID. RabbitMQ will validate this against the active connection user;
+    * `:app_id` - publishing application ID.
   """
   @spec publish(
           GenServer.server() | connection_info,
