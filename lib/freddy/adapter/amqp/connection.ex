@@ -1,28 +1,46 @@
 defmodule Freddy.Adapter.AMQP.Connection do
   @moduledoc false
 
-  @default_options [
-    heartbeat: 10,
-    connection_timeout: 5000
-  ]
+  import Freddy.Adapter.AMQP.Core
 
   def open(options)
 
   def open(options) when is_list(options) do
-    @default_options
-    |> Keyword.merge(options)
-    |> do_open()
+    amqp_params =
+      amqp_params_network(
+        username: Keyword.get(options, :username, "guest"),
+        password: Keyword.get(options, :password, "guest"),
+        virtual_host: Keyword.get(options, :virtual_host, "/"),
+        host: Keyword.get(options, :host, 'localhost') |> to_charlist(),
+        port: Keyword.get(options, :port, :undefined),
+        channel_max: Keyword.get(options, :channel_max, 0),
+        frame_max: Keyword.get(options, :frame_max, 0),
+        heartbeat: Keyword.get(options, :heartbeat, 10),
+        connection_timeout: Keyword.get(options, :connection_timeout, 5000),
+        ssl_options: Keyword.get(options, :ssl_options, :none) |> normalize_ssl_options(),
+        client_properties: Keyword.get(options, :client_properties, []),
+        socket_options: Keyword.get(options, :socket_options, []),
+        auth_mechanisms:
+          Keyword.get(options, :auth_mechanisms, [
+            &:amqp_auth_mechanisms.plain/3,
+            &:amqp_auth_mechanisms.amqplain/3
+          ])
+      )
+
+    do_open(amqp_params)
   end
 
   def open(uri) when is_binary(uri) do
+    case uri |> to_charlist() |> :amqp_uri.parse() do
+      {:ok, amqp_params} -> do_open(amqp_params)
+      error -> error
+    end
+
     do_open(uri)
   end
 
-  defp do_open(options_or_uri) do
-    case AMQP.Connection.open(options_or_uri) do
-      {:ok, %{pid: pid}} -> {:ok, pid}
-      {:error, _reason} = result -> result
-    end
+  defp do_open(amqp_params) do
+    :amqp_connection.start(amqp_params)
   end
 
   def close(connection) do
@@ -35,5 +53,19 @@ defmodule Freddy.Adapter.AMQP.Connection do
   def link(connection) do
     Process.link(connection)
     :ok
+  end
+
+  defp normalize_ssl_options(options) when is_list(options) do
+    for {k, v} <- options do
+      if k in [:cacertfile, :certfile, :keyfile] do
+        {k, to_charlist(v)}
+      else
+        {k, v}
+      end
+    end
+  end
+
+  defp normalize_ssl_options(options) do
+    options
   end
 end

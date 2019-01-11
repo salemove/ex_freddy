@@ -4,7 +4,7 @@ defmodule Freddy.Mixfile do
   def project do
     [
       app: :freddy,
-      version: "0.14.0",
+      version: "0.15.0",
       elixir: "~> 1.5",
       elixirc_paths: elixirc_paths(Mix.env()),
       build_embedded: Mix.env() == :prod,
@@ -33,10 +33,11 @@ defmodule Freddy.Mixfile do
 
   defp deps do
     [
-      {:amqp, "~> 0.3"},
+      {:amqp_client, "~> 3.6"},
       {:connection, "~> 1.0"},
       {:jason, "~> 1.0"},
       {:backoff, "~> 1.1"},
+      {:amqp, "~> 0.3 or ~> 1.0", only: :test},
       {:ex_doc, "~> 0.16", only: :dev},
       {:dialyxir, "~> 0.5", only: :dev, runtime: false},
       {:stream_data, "~> 0.4", only: :test}

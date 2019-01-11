@@ -22,8 +22,6 @@ defmodule Freddy.Core.Exchange do
     * `:arguments` - A set of arguments for the declaration. The syntax and semantics
       of these arguments depends on the server implementation.
 
-  See `AMQP.Exchange.declare/4` for more information.
-
   ## Example
 
       iex> %Freddy.Core.Exchange{name: "freddy-topic", type: :topic, durable: true}

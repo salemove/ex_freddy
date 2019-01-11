@@ -50,7 +50,7 @@ defmodule Freddy.Notifications.Broadcaster do
     * `broadcaster` - the pid of a `Freddy.Broadcaster` process
     * `routing_key` - message routing key
     * `payload` - message payload
-    * `opts` - AMQP `basic.publish` options (see `AMQP.Basic.publish/5` documentation)
+    * `opts` - Publisher options (see `Freddy.Publisher.publish/4` documentation)
   """
   def broadcast(broadcaster, routing_key, payload, opts \\ []) do
     Freddy.Publisher.publish(broadcaster, payload, routing_key, opts)

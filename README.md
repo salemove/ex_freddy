@@ -34,8 +34,8 @@ The connection process can be started like this:
 {:ok, conn} = Freddy.Connection.start_link(config)
 ```
 
-Check out [`AMQP.Connection.open/1`](https://hexdocs.pm/amqp/AMQP.Connection.html#open/1) for
-available options.
+Check out [`Freddy.Connection.start_link/2`](https://hexdocs.pm/freddy/Freddy.Connection.html#start_link/2) 
+for available options.
 
 Add this process to an OTP application supervision tree:
 
