@@ -119,6 +119,12 @@ defmodule Freddy.Adapter.Sandbox do
   end
 
   @impl true
+  def unbind_queue(channel, queue, exchange, options) do
+    Channel.register(channel, :unbind_queue, [channel, queue, exchange, options])
+    :ok
+  end
+
+  @impl true
   def delete_queue(channel, queue, options) do
     Channel.register(channel, :delete_queue, [channel, queue, options])
     # For the sandbox always return 0 messages

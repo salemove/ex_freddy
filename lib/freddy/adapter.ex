@@ -86,6 +86,11 @@ defmodule Freddy.Adapter do
   @callback bind_queue(channel, queue_name, exchange_name, options) :: :ok | {:error, error}
 
   @doc """
+  Unbinds given queue to the exchange
+  """
+  @callback unbind_queue(channel, queue_name, exchange_name, options) :: :ok | {:error, error}
+
+  @doc """
   Deletes the given queue
   """
   @callback delete_queue(channel, queue_name, options) :: {:ok, meta} | {:error, error}

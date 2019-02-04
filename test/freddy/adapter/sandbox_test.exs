@@ -54,6 +54,8 @@ defmodule Freddy.Adapter.SandboxTest do
     consumer = self()
     assert {:ok, tag} = consume(chan, name, consumer, [])
 
+    assert :ok = unbind_queue(chan, name, "topic-exchange", routing_key: "#")
+
     assert {:ok, meta} = delete_queue(chan, name, [])
 
     assert [
@@ -61,6 +63,7 @@ defmodule Freddy.Adapter.SandboxTest do
              {:declare_queue, [^chan, "", [durable: true]]},
              {:bind_queue, [^chan, ^name, "topic-exchange", [routing_key: "#"]]},
              {:consume, [^chan, ^name, ^consumer, ^tag, []]},
+             {:unbind_queue, [^chan, ^name, "topic-exchange", [routing_key: "#"]]},
              {:delete_queue, [^chan, ^name, []]}
            ] = history(conn)
   end
