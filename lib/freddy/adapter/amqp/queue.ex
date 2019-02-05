@@ -38,6 +38,21 @@ defmodule Freddy.Adapter.AMQP.Queue do
     end
   end
 
+  def unbind(channel, queue, exchange, options) do
+    queue_unbind =
+      queue_unbind(
+        queue: queue,
+        exchange: exchange,
+        routing_key: Keyword.get(options, :routing_key, ""),
+        arguments: Keyword.get(options, :arguments, []) |> to_type_tuple()
+      )
+
+    case Channel.call(channel, queue_unbind) do
+      queue_unbind_ok() -> :ok
+      error -> error
+    end
+  end
+
   def delete(channel, queue, options) do
     queue_delete =
       queue_delete(
