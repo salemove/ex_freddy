@@ -11,7 +11,7 @@ OTP behaviours for creating AMQP publishers and consumers.
 Add `freddy` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
-  [{:freddy, "~> 0.11.0"}]
+  [{:freddy, "~> 0.15.0"}]
 end
 ```
 
