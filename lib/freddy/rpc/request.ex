@@ -123,7 +123,7 @@ defmodule Freddy.RPC.Request do
   Get duration of the finished request with the given granularity.
   """
   @spec duration(t, granularity :: System.time_unit()) :: integer
-  def duration(%Request{start_time: t1, stop_time: t2} = _request, granularity \\ :milliseconds)
+  def duration(%Request{start_time: t1, stop_time: t2} = _request, granularity \\ :millisecond)
       when is_integer(t2) do
     System.convert_time_unit(t2 - t1, :native, granularity)
   end
@@ -247,7 +247,7 @@ defmodule Freddy.RPC.Request do
   # Borrowed from Plug.RequestId
   defp generate_id do
     binary = <<
-      System.system_time(:nanoseconds)::64,
+      System.system_time(:nanosecond)::64,
       :erlang.phash2({node(), self()}, 16_777_216)::24,
       :erlang.unique_integer()::32
     >>

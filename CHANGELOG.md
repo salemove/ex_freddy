@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [0.16.0] (In progress)
 
+## [0.15.2] (2019-07-12)
+
+### Fixed
+- Elixir 1.8 deprecation warnings (#33)
+
 ## [0.15.1] (2019-02-05)
 
 ### Added
