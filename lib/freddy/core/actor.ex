@@ -51,6 +51,7 @@ defmodule Freddy.Core.Actor do
       @type meta :: map
       @type state :: term
       @type connection :: GenServer.server()
+      @type consumer_options :: [{:channel_open_timeout, timeout()}]
 
       @doc """
       Called when the `#{Macro.to_string(__MODULE__)}` process is first started.
@@ -71,6 +72,7 @@ defmodule Freddy.Core.Actor do
       """
       @callback init(state) ::
                   {:ok, state}
+                  | {:ok, state, consumer_options}
                   | :ignore
                   | {:stop, reason :: term}
 
@@ -253,10 +255,11 @@ defmodule Freddy.Core.Actor do
   end
 
   use Connection
+
   alias Freddy.Core.Channel
 
   @reconnection_interval 1000
-  @channel_open_timeout 3000
+  @default_channel_open_timeout 3000
 
   @doc false
   def start_link(mod, connection, initial, opts \\ []) do
@@ -272,17 +275,10 @@ defmodule Freddy.Core.Actor do
   def init({mod, connection, initial}) do
     case mod.init(initial) do
       {:ok, given} ->
-        ref = Process.monitor(connection)
+        do_after_init(mod, connection, given, [])
 
-        {:connect, :connect,
-         %{
-           mod: mod,
-           connection: connection,
-           connection_ref: ref,
-           given: given,
-           channel: nil,
-           channel_ref: nil
-         }}
+      {:ok, given, options} ->
+        do_after_init(mod, connection, given, options)
 
       :ignore ->
         :ignore
@@ -292,16 +288,14 @@ defmodule Freddy.Core.Actor do
     end
   end
 
-  @impl true
-  def connect(_info, %{connection: connection} = state) do
-    case Freddy.Connection.open_channel(connection, @channel_open_timeout) do
-      {:ok, channel} ->
-        ref = Channel.monitor(channel)
 
-        state
-        |> Map.put(:channel, channel)
-        |> Map.put(:channel_ref, ref)
-        |> handle_mod_connected()
+  @impl true
+  def connect(_info, %{connection: connection,
+                       channel_ref: nil,
+                       channel_open_timeout: channel_open_timeout} = state) do
+    case Freddy.Connection.open_channel(connection, channel_open_timeout) do
+      {:ok, channel} ->
+        bind_to_channel(channel, state)
 
       _error ->
         {:backoff, @reconnection_interval, state}
@@ -309,6 +303,11 @@ defmodule Freddy.Core.Actor do
   catch
     :exit, {:timeout, _} ->
       {:backoff, @reconnection_interval, state}
+  end
+
+  @impl true
+  def connect(_info, state) do
+    {:ok, state}
   end
 
   @impl true
@@ -367,6 +366,19 @@ defmodule Freddy.Core.Actor do
     end
   end
 
+  def handle_info({ref, {:ok, %Channel{} = channel}}, state) when is_reference(ref) do
+    case handle_out_of_context_channel(channel, state) do
+      {:ok, state} ->
+        {:noreply, state}
+
+      {:stop, reason, state} ->
+        {:stop, reason, state}
+
+      {:backoff, _, _} = res ->
+        res
+    end
+  end
+
   def handle_info(message, %{mod: mod, given: given} = state) do
     case mod.handle_info(message, given) do
       {:noreply, new_given} ->
@@ -383,6 +395,42 @@ defmodule Freddy.Core.Actor do
   @impl true
   def terminate(reason, %{mod: mod, given: given} = _state) do
     mod.terminate(reason, given)
+  end
+
+  defp do_after_init(mod, connection, given, options) do
+    ref = Process.monitor(connection)
+
+    channel_open_timeout =
+      Keyword.get(options, :channel_open_timeout, @default_channel_open_timeout)
+
+    {:connect, :connect,
+     %{
+       channel_open_timeout: channel_open_timeout,
+       mod: mod,
+       connection: connection,
+       connection_ref: ref,
+       given: given,
+       channel: nil,
+       channel_ref: nil
+     }}
+  end
+
+  defp bind_to_channel(channel, state) do
+    ref = Channel.monitor(channel)
+
+    state
+    |> Map.put(:channel, channel)
+    |> Map.put(:channel_ref, ref)
+    |> handle_mod_connected()
+  end
+
+  defp handle_out_of_context_channel(channel, %{channel: nil} = state) do
+    bind_to_channel(channel, state)
+  end
+
+  defp handle_out_of_context_channel(channel, state) do
+    Channel.close(channel)
+    {:ok, state}
   end
 
   defp handle_mod_connected(%{mod: mod, channel: channel, channel_ref: ref, given: given} = state) do
