@@ -26,30 +26,39 @@ shared: &shared
     - run: mix test
 
 jobs:
-  "elixir-1.6":
-    docker:
-      - image: circleci/elixir:1.6
-        environment:
-          MIX_ENV: test
-      - image: rabbitmq:3.6-alpine
-
-    <<: *shared
-
-  "elixir-1.7":
-    docker:
-    - image: circleci/elixir:1.7
-      environment:
-        MIX_ENV: test
-    - image: rabbitmq:3.6-alpine
-
-    <<: *shared
-
   "elixir-1.8":
     docker:
       - image: circleci/elixir:1.8
         environment:
           MIX_ENV: test
-      - image: rabbitmq:3.6-alpine
+      - image: rabbitmq:3.8-alpine
+
+    <<: *shared
+
+  "elixir-1.9":
+    docker:
+      - image: circleci/elixir:1.9
+        environment:
+          MIX_ENV: test
+      - image: rabbitmq:3.8-alpine
+
+    <<: *shared
+
+  "elixir-1.10":
+    docker:
+      - image: circleci/elixir:1.10
+        environment:
+          MIX_ENV: test
+      - image: rabbitmq:3.8-alpine
+
+    <<: *shared
+
+  "elixir-1.11":
+    docker:
+      - image: circleci/elixir:1.11
+        environment:
+          MIX_ENV: test
+      - image: rabbitmq:3.8-alpine
 
     <<: *shared
 
@@ -57,6 +66,7 @@ workflows:
   version: 2
   build:
     jobs:
-      - "elixir-1.6"
-      - "elixir-1.7"
       - "elixir-1.8"
+      - "elixir-1.9"
+      - "elixir-1.10"
+      - "elixir-1.11"
