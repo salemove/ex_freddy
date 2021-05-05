@@ -130,7 +130,7 @@ defmodule ReliableBroadcaster do
   def before_publication(
     payload, routing_key, opts, %{connected: connected?, queue: queue} = state
   ) do
-    if connected? do
+    if not connected? do
       message = {payload, routing_key, opts}
       {:ignore, %{state | queue: :queue.in(message, queue)}}
     else
