@@ -288,11 +288,12 @@ defmodule Freddy.Core.Actor do
     end
   end
 
-
   @impl true
-  def connect(_info, %{connection: connection,
-                       channel_ref: nil,
-                       channel_open_timeout: channel_open_timeout} = state) do
+  def connect(
+        _info,
+        %{connection: connection, channel_ref: nil, channel_open_timeout: channel_open_timeout} =
+          state
+      ) do
     case Freddy.Connection.open_channel(connection, channel_open_timeout) do
       {:ok, channel} ->
         bind_to_channel(channel, state)

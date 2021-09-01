@@ -16,12 +16,14 @@ defmodule Freddy.Adapter.AMQPTest do
 
   describe "declare_exchange/4" do
     property "can declare an exchange", %{freddy: freddy, amqp: amqp} do
-      check all name <- identifier(),
-                type <- member_of([:direct, :fanout, :topic]),
-                durable? <- boolean(),
-                auto_delete? <- boolean(),
-                internal? <- boolean(),
-                max_runs: 10 do
+      check all(
+              name <- identifier(),
+              type <- member_of([:direct, :fanout, :topic]),
+              durable? <- boolean(),
+              auto_delete? <- boolean(),
+              internal? <- boolean(),
+              max_runs: 10
+            ) do
         options = [
           durable: durable?,
           auto_delete: auto_delete?,
@@ -39,10 +41,12 @@ defmodule Freddy.Adapter.AMQPTest do
 
   describe "declare_queue/3" do
     property "can declare a queue", %{freddy: freddy, amqp: amqp} do
-      check all name <- identifier(),
-                durable? <- boolean(),
-                auto_delete? <- boolean(),
-                max_runs: 10 do
+      check all(
+              name <- identifier(),
+              durable? <- boolean(),
+              auto_delete? <- boolean(),
+              max_runs: 10
+            ) do
         options = [
           durable: durable?,
           auto_delete: auto_delete?
@@ -57,10 +61,12 @@ defmodule Freddy.Adapter.AMQPTest do
 
   describe "delete_queue/3" do
     property "can delete a queue", %{freddy: freddy, amqp: amqp} do
-      check all name <- identifier(),
-                if_unused? <- boolean(),
-                if_empty? <- boolean(),
-                max_runs: 10 do
+      check all(
+              name <- identifier(),
+              if_unused? <- boolean(),
+              if_empty? <- boolean(),
+              max_runs: 10
+            ) do
         options = [
           if_unused: if_unused?,
           if_empty: if_empty?
