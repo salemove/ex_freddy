@@ -97,9 +97,6 @@ defmodule Freddy.Integration.PublisherTest do
     end
   end
 
-  # we're dealing with real RabbitMQ instance which may add latency
-  @assert_receive_interval 500
-
   setup context do
     {:ok, pid} = TestPublisher.start_link(context[:connection], self())
 
@@ -112,14 +109,14 @@ defmodule Freddy.Integration.PublisherTest do
 
   test "handle_connected/2 is called when RabbitMQ channel is opened" do
     assert_receive :init
-    assert_receive {:connected, %{exchange: _}}, @assert_receive_interval
+    assert_receive {:connected, %{exchange: _}}
   end
 
   test "handle_disconnected/2 is called when RabbitMQ connection is disrupted", %{
     connection: connection
   } do
     assert_receive :init
-    assert_receive {:connected, %{exchange: _}}, @assert_receive_interval
+    assert_receive {:connected, %{exchange: _}}
 
     assert {:ok, conn} = Freddy.Connection.get_connection(connection)
 
@@ -128,8 +125,8 @@ defmodule Freddy.Integration.PublisherTest do
     assert_receive {:DOWN, ^ref, :process, _, _}
 
     assert_receive {:disconnected, :shutdown}
-    refute_receive :init, @assert_receive_interval
-    assert_receive {:connected, _}, @assert_receive_interval
+    refute_receive :init
+    assert_receive {:connected, _}
   end
 
   test "before_publication/4 keeps message unchanged when returns {:ok, state}", %{
@@ -137,7 +134,7 @@ defmodule Freddy.Integration.PublisherTest do
     publisher: publisher
   } do
     {:ok, _consumer} = TestConsumer.start_link(connection, self())
-    assert_receive :consumer_ready, @assert_receive_interval
+    assert_receive :consumer_ready
 
     payload = %{action: "keep"}
     expected_payload = %{"action" => "keep"}
@@ -146,14 +143,14 @@ defmodule Freddy.Integration.PublisherTest do
     Freddy.Publisher.publish(publisher, payload, routing_key, mandatory: true)
 
     assert_receive {:before_publication, ^payload, ^routing_key, [mandatory: true]}
-    assert_receive {:message_received, ^expected_payload}, @assert_receive_interval
+    assert_receive {:message_received, ^expected_payload}
   end
 
   test "before_publication/4 changes payload, routing_key and opts " <>
          "when returns {:ok, payload, routing_key, opts}",
        %{connection: connection, publisher: publisher} do
     {:ok, _consumer} = TestConsumer.start_link(connection, self())
-    assert_receive :consumer_ready, @assert_receive_interval
+    assert_receive :consumer_ready
 
     payload = %{action: "change"}
     expected_payload = %{"action" => "change", "state" => "changed"}
@@ -163,7 +160,7 @@ defmodule Freddy.Integration.PublisherTest do
     Freddy.Publisher.publish(publisher, payload, routing_key, opts)
 
     assert_receive {:before_publication, ^payload, ^routing_key, [mandatory: true]}
-    assert_receive {:message_received, ^expected_payload}, @assert_receive_interval
+    assert_receive {:message_received, ^expected_payload}
   end
 
   test "handle_call/3 is called on Freddy.Publisher.call", %{publisher: publisher} do

@@ -66,9 +66,6 @@ defmodule Freddy.Integration.TracingTest do
     end
   end
 
-  # we're dealing with real RabbitMQ instance which may add latency
-  @assert_receive_interval 500
-
   setup context do
     :application.stop(:opentelemetry)
     :application.set_env(:opentelemetry, :tracer, :otel_tracer_default)
@@ -82,7 +79,7 @@ defmodule Freddy.Integration.TracingTest do
 
     {:ok, _consumer} = TestConsumer.start_link(context[:connection], self())
     assert_receive :init
-    assert_receive {:ready, _}, @assert_receive_interval
+    assert_receive {:ready, _}
 
     :ok
   end
@@ -94,8 +91,7 @@ defmodule Freddy.Integration.TracingTest do
     {:ok, publisher} = TestPublisher.start_link(connection)
     Freddy.Publisher.publish(publisher, payload, routing_key)
 
-    assert_receive {:message, ^payload, %{routing_key: ^routing_key} = _meta},
-                   @assert_receive_interval
+    assert_receive {:message, ^payload, %{routing_key: ^routing_key} = _meta}
 
     # Send: Starts a new trace because there are no existing trace
     assert_receive {:span,
@@ -146,8 +142,7 @@ defmodule Freddy.Integration.TracingTest do
       Freddy.Publisher.publish(publisher, payload, routing_key)
     end
 
-    assert_receive {:message, ^payload, %{routing_key: ^routing_key} = _meta},
-                   @assert_receive_interval
+    assert_receive {:message, ^payload, %{routing_key: ^routing_key} = _meta}
 
     # We manually started a new trace
     assert_receive {:span, span(name: "test span", trace_id: trace_id, span_id: root_span_id)}

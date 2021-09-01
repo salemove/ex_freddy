@@ -83,9 +83,6 @@ defmodule Freddy.Integration.ConsumerTest do
     end
   end
 
-  # we're dealing with real RabbitMQ instance which may add latency
-  @assert_receive_interval 500
-
   describe "consumer initialization" do
     test "init/1 callback is called", %{connection: connection} do
       {:ok, _consumer} = TestConsumer.start_link(connection, self())
@@ -98,7 +95,7 @@ defmodule Freddy.Integration.ConsumerTest do
     } do
       {:ok, _consumer} = TestConsumer.start_link(connection, self())
 
-      assert_receive {:connected, %{queue: _, exchange: _}}, @assert_receive_interval
+      assert_receive {:connected, %{queue: _, exchange: _}}
     end
 
     test "handle_ready/2 callback is called when RabbitMQ registers consumer", %{
@@ -106,7 +103,7 @@ defmodule Freddy.Integration.ConsumerTest do
     } do
       {:ok, _consumer} = TestConsumer.start_link(connection, self())
 
-      assert_receive {:ready, %{consumer_tag: _tag}}, @assert_receive_interval
+      assert_receive {:ready, %{consumer_tag: _tag}}
     end
   end
 
@@ -114,7 +111,7 @@ defmodule Freddy.Integration.ConsumerTest do
     setup context do
       {:ok, consumer} = TestConsumer.start_link(context[:connection], self())
       assert_receive :init
-      assert_receive {:ready, _}, @assert_receive_interval
+      assert_receive {:ready, _}
 
       {:ok, Map.put(context, :consumer, consumer)}
     end
@@ -128,8 +125,7 @@ defmodule Freddy.Integration.ConsumerTest do
       {:ok, publisher} = TestPublisher.start_link(connection)
       Freddy.Publisher.publish(publisher, payload, routing_key)
 
-      assert_receive {:message, ^payload, %{routing_key: ^routing_key} = _meta},
-                     @assert_receive_interval
+      assert_receive {:message, ^payload, %{routing_key: ^routing_key} = _meta}
     end
 
     test "binds only to specified routing keys", %{connection: connection} do
@@ -138,7 +134,7 @@ defmodule Freddy.Integration.ConsumerTest do
       {:ok, publisher} = TestPublisher.start_link(connection)
       Freddy.Publisher.publish(publisher, %{}, routing_key)
 
-      refute_receive {:message, _, %{routing_key: ^routing_key}}, @assert_receive_interval
+      refute_receive {:message, _, %{routing_key: ^routing_key}}
     end
 
     test "handle_disconnected/2 callback is called when connection is disrupted", %{
@@ -151,8 +147,8 @@ defmodule Freddy.Integration.ConsumerTest do
       assert_receive {:DOWN, ^ref, :process, _, _}
 
       assert_receive {:disconnected, :shutdown}
-      refute_receive :init, @assert_receive_interval
-      assert_receive {:ready, _}, @assert_receive_interval
+      refute_receive :init
+      assert_receive {:ready, _}
     end
 
     test "handle_call/3 is called on Freddy.Consumer.call", %{consumer: consumer} do

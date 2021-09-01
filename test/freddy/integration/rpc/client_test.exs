@@ -121,9 +121,6 @@ defmodule Freddy.Integration.RPC.ClientTest do
     end
   end
 
-  # we're dealing with real RabbitMQ instance which may add latency
-  @assert_receive_interval 500
-
   setup context do
     connection = context[:connection]
     client_opts = context[:client_options] || []
@@ -134,11 +131,11 @@ defmodule Freddy.Integration.RPC.ClientTest do
     context =
       if context[:server] do
         assert_receive :init
-        assert_receive {:connected, _}, @assert_receive_interval
-        assert_receive {:ready, _}, @assert_receive_interval
+        assert_receive {:connected, _}
+        assert_receive {:ready, _}
 
         {:ok, server} = TestServer.start_link(connection, self())
-        assert_receive :server_ready, @assert_receive_interval
+        assert_receive :server_ready
 
         Map.put(context, :server, server)
       else
@@ -154,17 +151,17 @@ defmodule Freddy.Integration.RPC.ClientTest do
 
   test "handle_connected/2 is called after init/1" do
     assert_receive :init
-    assert_receive {:connected, %{queue: _, exchange: _}}, @assert_receive_interval
+    assert_receive {:connected, %{queue: _, exchange: _}}
   end
 
   test "handle_ready/2 is called when client is ready to consume response messages" do
     assert_receive :init
-    assert_receive {:connected, _}, @assert_receive_interval
-    assert_receive {:ready, "amq.gen-" <> _random_name}, @assert_receive_interval
+    assert_receive {:connected, _}
+    assert_receive {:ready, "amq.gen-" <> _random_name}
   end
 
   test "before_request/2 can reply early", %{client: client} do
-    assert_receive {:ready, _}, @assert_receive_interval
+    assert_receive {:ready, _}
 
     assert TestClient.request(
              client,
@@ -286,18 +283,18 @@ defmodule Freddy.Integration.RPC.ClientTest do
     Process.exit(conn, {:shutdown, {:server_initiated_close, 320, 'Good bye'}})
     assert_receive {:DOWN, ^ref, :process, _, _}
 
-    assert_receive {:disconnected, :shutdown}, @assert_receive_interval
-    refute_receive :init, @assert_receive_interval
-    assert_receive {:ready, _}, @assert_receive_interval
+    assert_receive {:disconnected, :shutdown}
+    refute_receive :init
+    assert_receive {:ready, _}
   end
 
   test "request/5 returns {:error, :not_connected} when client is in disconnected state", %{
     connection: connection,
     client: client
   } do
-    assert_receive {:connected, _}, @assert_receive_interval
+    assert_receive {:connected, _}
     Freddy.Connection.close(connection)
-    assert_receive {:disconnected, _}, @assert_receive_interval
+    assert_receive {:disconnected, _}
     assert {:error, :not_connected} = TestClient.request(client, "_server", "_payload")
   end
 
