@@ -34,14 +34,11 @@ defmodule Freddy.Integration.Notifications.ListenerTest do
     end
   end
 
-  # we're dealing with real RabbitMQ instance which may add latency
-  @assert_receive_interval 500
-
   test "consumes messages from freddy-topic exchange", %{connection: connection} do
     {:ok, broadcaster} = TestBroadcaster.start_link(connection)
     {:ok, _consumer} = TestListener.start_link(connection, self())
 
-    assert_receive :consumer_ready, @assert_receive_interval
+    assert_receive :consumer_ready
 
     payload = %{"key" => "value"}
     TestBroadcaster.broadcast(broadcaster, "freddy-test", payload)

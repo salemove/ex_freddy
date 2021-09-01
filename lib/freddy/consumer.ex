@@ -371,39 +371,41 @@ defmodule Freddy.Consumer do
 
   @reply_actions [:ack, :nack, :reject]
 
-  defp handle_delivery(payload, meta, state(mod: mod, given: given) = state) do
-    meta = complete(meta, state)
+  defp handle_delivery(payload, meta, state(mod: mod, given: given, exchange: exchange) = state) do
+    Freddy.Tracer.with_process_span(meta, exchange, mod, fn ->
+      meta = complete(meta, state)
 
-    result =
-      case mod.decode_message(payload, meta, given) do
-        {:ok, new_payload, new_given} ->
-          mod.handle_message(new_payload, meta, new_given)
+      result =
+        case mod.decode_message(payload, meta, given) do
+          {:ok, new_payload, new_given} ->
+            mod.handle_message(new_payload, meta, new_given)
 
-        {:ok, new_payload, new_meta, new_given} ->
-          mod.handle_message(new_payload, new_meta, new_given)
+          {:ok, new_payload, new_meta, new_given} ->
+            mod.handle_message(new_payload, new_meta, new_given)
 
-        other ->
-          other
+          other ->
+            other
+        end
+
+      case result do
+        {:reply, action, new_given} when action in @reply_actions ->
+          apply(__MODULE__, action, [meta])
+          {:noreply, state(state, given: new_given)}
+
+        {:reply, action, opts, new_given} when action in @reply_actions ->
+          apply(__MODULE__, action, [meta, opts])
+          {:noreply, state(state, given: new_given)}
+
+        {:noreply, new_given} ->
+          {:noreply, state(state, given: new_given)}
+
+        {:noreply, new_given, timeout} ->
+          {:noreply, state(state, given: new_given), timeout}
+
+        {:stop, reason, new_given} ->
+          {:stop, reason, state(state, given: new_given)}
       end
-
-    case result do
-      {:reply, action, new_given} when action in @reply_actions ->
-        apply(__MODULE__, action, [meta])
-        {:noreply, state(state, given: new_given)}
-
-      {:reply, action, opts, new_given} when action in @reply_actions ->
-        apply(__MODULE__, action, [meta, opts])
-        {:noreply, state(state, given: new_given)}
-
-      {:noreply, new_given} ->
-        {:noreply, state(state, given: new_given)}
-
-      {:noreply, new_given, timeout} ->
-        {:noreply, state(state, given: new_given), timeout}
-
-      {:stop, reason, new_given} ->
-        {:stop, reason, state(state, given: new_given)}
-    end
+    end)
   end
 
   defp complete(meta, state(channel: channel, queue: queue, exchange: exchange)) do
