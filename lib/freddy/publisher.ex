@@ -233,6 +233,8 @@ defmodule Freddy.Publisher do
   end
 
   def publish(publisher, payload, routing_key, opts) do
+    opts = Freddy.Tracer.add_context_to_opts(opts)
+
     cast(publisher, {:"$publish", payload, routing_key, opts})
   end
 
@@ -254,6 +256,8 @@ defmodule Freddy.Publisher do
 
   @impl true
   def handle_cast({:"$publish", payload, routing_key, opts}, state) do
+    opts = Freddy.Tracer.attach_context_from_opts(opts)
+
     handle_publish(payload, routing_key, opts, state)
   end
 
