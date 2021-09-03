@@ -52,7 +52,16 @@ defmodule Freddy.Tracer do
       links: [link],
       kind: :consumer
     } do
-      block.()
+      try do
+        block.()
+      rescue
+        exception ->
+          ctx = OpenTelemetry.Tracer.current_span_ctx()
+          OpenTelemetry.Span.record_exception(ctx, exception, __STACKTRACE__, [])
+          OpenTelemetry.Tracer.set_status(OpenTelemetry.status(:error, ""))
+
+          reraise(exception, __STACKTRACE__)
+      end
     end
   end
 

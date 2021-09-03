@@ -50,6 +50,10 @@ defmodule Freddy.Integration.TracingTest do
     def handle_message(payload, meta, pid) do
       send(pid, {:message, payload, meta})
 
+      if payload["raise"] do
+        raise payload["raise"]
+      end
+
       {:reply, :ack, pid}
     end
   end
@@ -155,6 +159,38 @@ defmodule Freddy.Integration.TracingTest do
                       status: :undefined,
                       trace_id: ^trace_id,
                       parent_span_id: ^root_span_id
+                    )}
+  end
+
+  test "consumer marks span as errored on exception", %{connection: connection} do
+    Process.flag(:trap_exit, true)
+
+    payload = %{"raise" => "some-error"}
+    routing_key = "routing-key1"
+
+    {:ok, publisher} = TestPublisher.start_link(connection)
+
+    Freddy.Publisher.publish(publisher, payload, routing_key)
+
+    assert_receive {:message, ^payload, %{routing_key: ^routing_key} = _meta}
+
+    expected_status = OpenTelemetry.status(:error, "")
+
+    assert_receive {:span,
+                    span(
+                      name: "freddy-test-topic-exchange.routing-key1 process",
+                      kind: :consumer,
+                      status: ^expected_status,
+                      events: [
+                        event(
+                          name: "exception",
+                          attributes: [
+                            {"exception.type", "Elixir.RuntimeError"},
+                            {"exception.message", "some-error"},
+                            {"exception.stacktrace", _stacktrace}
+                          ]
+                        )
+                      ]
                     )}
   end
 end
