@@ -30,7 +30,7 @@ defmodule Freddy.Tracer do
   end
 
   def with_process_span(meta, exchange, mod, block) do
-    headers = normalize_headers(Map.get(meta, :headers, %{}))
+    headers = normalize_headers(Map.get(meta, :headers, []))
     :otel_propagator.text_map_extract(headers)
 
     routing_key = Map.get(meta, :routing_key)
@@ -65,8 +65,11 @@ defmodule Freddy.Tracer do
     end
   end
 
-  # amqp returns headers in {key, type, value} format. Convert these into just
-  # {key, value}.
+  # amqp uses `:undefined` if no headers are present
+  defp normalize_headers(:undefined), do: []
+
+  # amqp returns headers in [{key, type, value}, ...] format. Convert these
+  # into just [{key, value}].
   defp normalize_headers(headers) do
     Enum.map(headers, fn {key, _type, value} -> {key, value} end)
   end
