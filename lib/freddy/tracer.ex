@@ -36,7 +36,7 @@ defmodule Freddy.Tracer do
     routing_key = Map.get(meta, :routing_key)
 
     parent = OpenTelemetry.Tracer.current_span_ctx()
-    link = OpenTelemetry.link(parent)
+    links = if parent == :undefined, do: [], else: [OpenTelemetry.link(parent)]
 
     destination_kind = if exchange.type == :direct, do: "queue", else: "topic"
 
@@ -49,7 +49,7 @@ defmodule Freddy.Tracer do
         "messaging.operation": "process",
         "messaging.freddy.worker": to_string(mod)
       ],
-      links: [link],
+      links: links,
       kind: :consumer
     } do
       try do
