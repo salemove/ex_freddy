@@ -136,6 +136,26 @@ defmodule Freddy.Integration.TracingTest do
            ] == List.keysort(attributes, 0)
   end
 
+  test "consumer does not create a link when no existing trace", %{connection: connection} do
+    payload = %{"key" => "value"}
+    routing_key = "routing-key1"
+
+    {:ok, publisher} = TestPublisher.start_link(connection)
+    Freddy.Publisher.publish(publisher, payload, routing_key, disable_trace_propagation: true)
+
+    assert_receive {:message, ^payload, %{routing_key: ^routing_key} = _meta}
+
+    assert_receive {:span,
+                    span(
+                      name: "freddy-test-topic-exchange.routing-key1 process",
+                      kind: :consumer,
+                      status: :undefined,
+                      parent_span_id: :undefined,
+                      links: [],
+                      attributes: _attributes
+                    )}
+  end
+
   test "producer uses existing trace when present", %{connection: connection} do
     payload = %{"key" => "value"}
     routing_key = "routing-key1"
