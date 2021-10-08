@@ -1,6 +1,8 @@
 defmodule Freddy.Tracer do
   require OpenTelemetry.Tracer
 
+  @response_queue_prefix "amq.gen-"
+
   def add_context_to_opts(opts) do
     Keyword.put(opts, :ctx, OpenTelemetry.Ctx.get_current())
   end
@@ -13,8 +15,9 @@ defmodule Freddy.Tracer do
 
   def with_send_span(exchange, routing_key, block) do
     destination_kind = if exchange.type == :direct, do: "queue", else: "topic"
+    span_name = "#{span_destination(exchange.name, routing_key)} send"
 
-    OpenTelemetry.Tracer.with_span "#{exchange.name}.#{routing_key} send", %{
+    OpenTelemetry.Tracer.with_span span_name, %{
       attributes: [
         "messaging.system": "rabbitmq",
         "messaging.rabbitmq_routing_key": routing_key,
@@ -39,8 +42,9 @@ defmodule Freddy.Tracer do
     links = if parent == :undefined, do: [], else: [OpenTelemetry.link(parent)]
 
     destination_kind = if exchange.type == :direct, do: "queue", else: "topic"
+    span_name = "#{span_destination(exchange.name, routing_key)} process"
 
-    OpenTelemetry.Tracer.with_span %{}, "#{exchange.name}.#{routing_key} process", %{
+    OpenTelemetry.Tracer.with_span %{}, span_name, %{
       attributes: [
         "messaging.system": "rabbitmq",
         "messaging.rabbitmq_routing_key": routing_key,
@@ -62,6 +66,14 @@ defmodule Freddy.Tracer do
 
           reraise(exception, __STACKTRACE__)
       end
+    end
+  end
+
+  defp span_destination(exchange_name, routing_key) do
+    if routing_key && String.starts_with?(routing_key, @response_queue_prefix) do
+      "#{exchange_name}.(response queue)"
+    else
+      "#{exchange_name}.#{routing_key}"
     end
   end
 
