@@ -514,6 +514,8 @@ defmodule Freddy.RPC.Client do
           | {:error, reason :: term}
           | {:error, reason :: term, hint :: term}
   def request(client, routing_key, payload, options \\ []) do
+    options = Freddy.Tracer.add_context_to_opts(options)
+
     Freddy.Consumer.call(
       client,
       {:"$request", payload, routing_key, options},
@@ -602,6 +604,8 @@ defmodule Freddy.RPC.Client do
 
   @impl true
   def handle_call({:"$request", payload, routing_key, opts}, from, state) do
+    opts = Freddy.Tracer.attach_context_from_opts(opts)
+
     handle_request(payload, routing_key, opts, from, state)
   end
 
