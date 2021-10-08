@@ -9,6 +9,9 @@ defmodule Freddy.Mixfile do
       elixirc_paths: elixirc_paths(Mix.env()),
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
+      aliases: [
+        lint: ["compile", "dialyzer --halt-exit-status"]
+      ],
       deps: deps(),
       package: package(),
       description: "JSON RPC Client/Server, JSON Publisher-Subscriber over AMQP",

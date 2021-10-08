@@ -1,0 +1,65 @@
+name: ci
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  elixir:
+    services:
+      rabbitmq:
+        image: rabbitmq:3.8-alpine
+        ports:
+          - "5672:5672"
+    name: OTP ${{matrix.pair.otp_version}} / Elixir ${{matrix.pair.elixir}}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - pair:
+              elixir: '1.10'
+              otp: '23.0'
+          - pair:
+              elixir: '1.11'
+              otp: '23.0'
+          - pair:
+              elixir: '1.12'
+              otp: '24.0'
+            lint: lint
+    steps:
+      - uses: actions/checkout@v2
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{matrix.pair.otp}}
+          elixir-version: ${{matrix.pair.elixir}}
+      - uses: actions/cache@v2
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{matrix.pair.elixir}}-${{matrix.pair.otp}}-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-${{matrix.pair.elixir}}-${{matrix.pair.otp}}-
+
+      - name: Run mix deps.get
+        run: mix deps.get
+
+      - name: Run mix format
+        run: mix format --check-formatted
+        if: ${{ matrix.lint }}
+
+      - name: Run mix deps.compile
+        run: mix deps.compile
+
+      - name: Run mix compile
+        run: mix compile --warnings-as-errors
+        if: ${{ matrix.lint }}
+
+      - name: Run mix lint
+        run: mix lint
+        if: ${{ matrix.lint }}
+
+      - name: Run mix test
+        run: mix test
