@@ -26,7 +26,7 @@ defmodule Freddy.Tracer do
       ],
       kind: :producer
     } do
-      headers = :otel_propagator.text_map_inject([])
+      headers = inject([])
 
       block.(headers)
     end
@@ -34,7 +34,7 @@ defmodule Freddy.Tracer do
 
   def with_process_span(meta, exchange, mod, block) do
     headers = normalize_headers(Map.get(meta, :headers, []))
-    :otel_propagator.text_map_extract(headers)
+    extract(headers)
 
     routing_key = Map.get(meta, :routing_key)
 
@@ -85,4 +85,7 @@ defmodule Freddy.Tracer do
   defp normalize_headers(headers) do
     Enum.map(headers, fn {key, _type, value} -> {key, value} end)
   end
+
+  defp extract(carrier), do: :otel_propagator_text_map.extract(carrier)
+  defp inject(carrier), do: :otel_propagator_text_map.inject(carrier)
 end
