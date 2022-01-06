@@ -75,14 +75,14 @@ defmodule Freddy.Integration.TracingTest do
     :application.set_env(:opentelemetry, :tracer, :otel_tracer_default)
 
     :application.set_env(:opentelemetry, :processors, [
-      {:otel_batch_processor, %{scheduled_delay_ms: 1}}
+      {:otel_batch_processor, %{scheduled_delay_ms: 1, exporter: {:otel_exporter_pid, self()}}}
     ])
 
     :application.start(:opentelemetry)
-    :otel_batch_processor.set_exporter(:otel_exporter_pid, self())
 
     {:ok, _consumer} = TestConsumer.start_link(context[:connection], self())
     assert_receive :init
+    assert_receive {:connected, _}
     assert_receive {:ready, _}
 
     :ok
@@ -109,12 +109,12 @@ defmodule Freddy.Integration.TracingTest do
                       attributes: attributes
                     )}
 
-    assert [
+    assert %{
              "messaging.destination": "freddy-test-topic-exchange",
              "messaging.destination_kind": "topic",
              "messaging.rabbitmq_routing_key": "routing-key1",
              "messaging.system": "rabbitmq"
-           ] == List.keysort(attributes, 0)
+           } = :otel_attributes.map(attributes)
 
     # Process: starts a new trace and but uses `links` to link them together.
     assert_receive {:span,
@@ -122,18 +122,20 @@ defmodule Freddy.Integration.TracingTest do
                       name: "freddy-test-topic-exchange.routing-key1 process",
                       kind: :consumer,
                       status: :undefined,
-                      links: [link(trace_id: ^sender_trace_id, span_id: ^sender_span_id)],
+                      links: links,
                       attributes: attributes
                     )}
 
-    assert [
+    assert [link(trace_id: ^sender_trace_id, span_id: ^sender_span_id)] = :otel_links.list(links)
+
+    assert %{
              "messaging.destination": "freddy-test-topic-exchange",
              "messaging.destination_kind": "topic",
              "messaging.freddy.worker": "Elixir.Freddy.Integration.TracingTest.TestConsumer",
              "messaging.operation": "process",
              "messaging.rabbitmq_routing_key": "routing-key1",
              "messaging.system": "rabbitmq"
-           ] == List.keysort(attributes, 0)
+           } = :otel_attributes.map(attributes)
   end
 
   test "consumer does not create a link when no existing trace", %{connection: connection} do
@@ -151,9 +153,11 @@ defmodule Freddy.Integration.TracingTest do
                       kind: :consumer,
                       status: :undefined,
                       parent_span_id: :undefined,
-                      links: [],
+                      links: links,
                       attributes: _attributes
                     )}
+
+    assert [] = :otel_links.list(links)
   end
 
   test "producer uses existing trace when present", %{connection: connection} do
@@ -201,16 +205,15 @@ defmodule Freddy.Integration.TracingTest do
                       name: "freddy-test-topic-exchange.routing-key1 process",
                       kind: :consumer,
                       status: ^expected_status,
-                      events: [
-                        event(
-                          name: "exception",
-                          attributes: [
-                            {"exception.type", "Elixir.RuntimeError"},
-                            {"exception.message", "some-error"},
-                            {"exception.stacktrace", _stacktrace}
-                          ]
-                        )
-                      ]
+                      events: events
                     )}
+
+    [event(name: "exception", attributes: event_attributes)] = :otel_events.list(events)
+
+    assert %{
+             "exception.type" => "Elixir.RuntimeError",
+             "exception.message" => "some-error",
+             "exception.stacktrace" => _stacktrace
+           } = :otel_attributes.map(event_attributes)
   end
 end
