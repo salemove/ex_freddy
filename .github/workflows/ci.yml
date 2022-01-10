@@ -19,13 +19,13 @@ jobs:
       matrix:
         include:
           - pair:
-              elixir: '1.10'
-              otp: '23.0'
-          - pair:
               elixir: '1.11'
               otp: '23.0'
           - pair:
               elixir: '1.12'
+              otp: '24.0'
+          - pair:
+              elixir: '1.13'
               otp: '24.0'
             lint: lint
     steps:
