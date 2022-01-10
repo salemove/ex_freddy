@@ -18,12 +18,12 @@ defmodule Freddy.Tracer do
     span_name = "#{span_destination(exchange.name, routing_key)} send"
 
     OpenTelemetry.Tracer.with_span span_name, %{
-      attributes: [
+      attributes: %{
         "messaging.system": "rabbitmq",
         "messaging.rabbitmq_routing_key": routing_key,
         "messaging.destination": exchange.name,
         "messaging.destination_kind": destination_kind
-      ],
+      },
       kind: :producer
     } do
       headers = inject([])
@@ -45,14 +45,14 @@ defmodule Freddy.Tracer do
     span_name = "#{span_destination(exchange.name, routing_key)} process"
 
     OpenTelemetry.Tracer.with_span %{}, span_name, %{
-      attributes: [
+      attributes: %{
         "messaging.system": "rabbitmq",
         "messaging.rabbitmq_routing_key": routing_key,
         "messaging.destination": exchange.name,
         "messaging.destination_kind": destination_kind,
         "messaging.operation": "process",
         "messaging.freddy.worker": to_string(mod)
-      ],
+      },
       links: links,
       kind: :consumer
     } do

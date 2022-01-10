@@ -4,8 +4,8 @@ defmodule Freddy.Mixfile do
   def project do
     [
       app: :freddy,
-      version: "0.17.0-rc.5",
-      elixir: "~> 1.6",
+      version: "0.17.0",
+      elixir: "~> 1.11",
       elixirc_paths: elixirc_paths(Mix.env()),
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
@@ -40,12 +40,12 @@ defmodule Freddy.Mixfile do
       {:connection, "~> 1.0"},
       {:jason, "~> 1.0"},
       {:backoff, "~> 1.1"},
-      {:opentelemetry_api, "~> 1.0.0-rc.3"},
+      {:opentelemetry_api, "~> 1.0"},
       {:amqp, "~> 0.3 or ~> 1.0", only: :test},
       {:ex_doc, "~> 0.16", only: :dev},
       {:dialyxir, "~> 0.5", only: :dev, runtime: false},
       {:stream_data, "~> 0.4", only: :test},
-      {:opentelemetry, "~> 1.0.0-rc.3", only: [:test]}
+      {:opentelemetry, "~> 1.0", only: [:test], runtime: false}
     ]
   end
 
