@@ -39,6 +39,41 @@ defmodule Freddy.Adapter.Sandbox do
   end
 
   @doc """
+  Sends a message to the process specified by `dest` whenever an
+  event occurs.
+
+  The messages will be tuples `{event, args}` where `event` is an atom
+  that corresponds to a callback in the `Freddy.Adapter` module. `args` is
+  a list of arguments passed to the callback.
+
+  `dest` may be either a PID or a locally registered name (atom).
+
+  ## Example
+
+      iex> alias Freddy.{Connection, Core.Exchange, Adapter.Sandbox}
+      iex> {:ok, conn} = Connection.start_link(adapter: :sandbox)
+      iex> {:ok, pid} = Connection.get_connection(conn)
+      iex> :ok = Sandbox.add_listener(pid, self())
+      iex> {:ok, channel} = Connection.open_channel(conn)
+      iex> :ok = Exchange.declare(%Exchange{name: "test"}, channel)
+      iex> flush()
+      {:open_channel, [#PID<0.226.0>]}
+      {:monitor_channel, [#PID<0.228.0>]}
+      {:declare_exchange, [#PID<0.228.0>, "test", :direct, []]}
+
+  """
+  def add_listener(connection, dest) do
+    Connection.add_listener(connection, dest)
+  end
+
+  @doc """
+  Removes a listener previously registered with `add_listener/2`.
+  """
+  def remove_listener(connection, dest) do
+    Connection.remove_listener(connection, dest)
+  end
+
+  @doc """
   Sets a response for `open_channel/1` function. If set to `:ok`, the function
   will return a tuple `{:ok, channel_pid}` (default behaviour).
   """
