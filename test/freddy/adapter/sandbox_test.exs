@@ -89,4 +89,30 @@ defmodule Freddy.Adapter.SandboxTest do
     assert {:ok, chan} = open_channel(conn)
     assert is_pid(chan)
   end
+
+  test "sends channel events to listener processes as messages", %{conn: conn, chan: chan} do
+    add_listener(conn, self())
+
+    monitor_channel(chan)
+    assert_receive {:monitor_channel, [^chan]}
+
+    return_handler = self()
+    :ok = register_return_handler(chan, return_handler)
+    assert_receive {:register_return_handler, [^chan, ^return_handler]}
+
+    :ok = qos(chan, prefetch_count: 10)
+    assert_receive {:qos, [^chan, [prefetch_count: 10]]}
+
+    :ok = ack(chan, "tag1", [])
+    assert_receive {:ack, [^chan, "tag1", []]}
+
+    :ok = nack(chan, "tag2", requeue: false)
+    assert_receive {:nack, [^chan, "tag2", [requeue: false]]}
+
+    assert :ok = reject(chan, "tag3", requeue: false)
+    assert_receive {:reject, [^chan, "tag3", [requeue: false]]}
+
+    assert :ok = close_channel(chan)
+    assert_receive {:close_channel, [^chan]}
+  end
 end

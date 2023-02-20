@@ -31,14 +31,29 @@ defmodule Freddy.Adapter.Sandbox.Connection do
     GenServer.call(connection, {:history, type, flush?})
   end
 
-  @impl true
-  def init(_) do
-    {:ok, %{history: [], on_open_channel: :ok}}
+  def add_listener(connection, dest) do
+    GenServer.call(connection, {:add_listener, dest})
+  end
+
+  def remove_listener(connection, dest) do
+    GenServer.call(connection, {:remove_listener, dest})
   end
 
   @impl true
-  def handle_call({:register, event, args}, _from, %{history: history} = state) do
+  def init(_) do
+    {:ok, %{history: [], listeners: [], on_open_channel: :ok}}
+  end
+
+  @impl true
+  def handle_call(
+        {:register, event, args},
+        _from,
+        %{history: history, listeners: listeners} = state
+      ) do
     new_history = [{event, args} | history]
+
+    Enum.each(listeners, fn dest -> send(dest, {event, args}) end)
+
     {:reply, :ok, put_in(state[:history], new_history)}
   end
 
@@ -59,6 +74,16 @@ defmodule Freddy.Adapter.Sandbox.Connection do
 
     new_history = flush(history, flush?)
     {:reply, matching_events, put_in(state[:history], new_history)}
+  end
+
+  def handle_call({:add_listener, dest}, _from, %{listeners: listeners} = state) do
+    new_listeners = [dest | listeners]
+    {:reply, :ok, put_in(state[:listeners], new_listeners)}
+  end
+
+  def handle_call({:remove_listener, dest}, _from, %{listeners: listeners} = state) do
+    new_listeners = List.delete(listeners, dest)
+    {:reply, :ok, put_in(state[:listeners], new_listeners)}
   end
 
   def handle_call(:get_on_open_channel, _from, %{on_open_channel: resp} = state) do
