@@ -56,7 +56,7 @@ defmodule Freddy.Adapter.SandboxTest do
 
     assert :ok = unbind_queue(chan, name, "topic-exchange", routing_key: "#")
 
-    assert {:ok, meta} = delete_queue(chan, name, [])
+    assert {:ok, _meta} = delete_queue(chan, name, [])
 
     assert [
              {:open_channel, [^conn]},
