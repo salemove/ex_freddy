@@ -10,12 +10,12 @@ defmodule Freddy.Mixfile do
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
       aliases: [
-        lint: ["compile", "dialyzer --halt-exit-status"]
+        lint: ["compile", "dialyzer"]
       ],
       deps: deps(),
       package: package(),
       description: "JSON RPC Client/Server, JSON Publisher-Subscriber over AMQP",
-      dialyzer: [flags: [:error_handling, :race_conditions, :underspecs]],
+      dialyzer: [flags: [:error_handling, :underspecs]],
       docs: [
         extras: ["README.md"],
         main: "readme"
@@ -43,7 +43,7 @@ defmodule Freddy.Mixfile do
       {:opentelemetry_api, "~> 1.0"},
       {:amqp, "~> 4.0", only: :test},
       {:ex_doc, "~> 0.16", only: :dev},
-      {:dialyxir, "~> 0.5", only: :dev, runtime: false},
+      {:dialyxir, "~> 1.4", only: :dev, runtime: false},
       {:stream_data, "~> 1.2", only: :test},
       {:opentelemetry, "~> 1.0", only: [:test], runtime: false}
     ]
