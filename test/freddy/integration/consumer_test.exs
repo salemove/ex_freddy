@@ -137,18 +137,22 @@ defmodule Freddy.Integration.ConsumerTest do
       refute_receive {:message, _, %{routing_key: ^routing_key}}
     end
 
+    @tag capture_log: true
     test "handle_disconnected/2 callback is called when connection is disrupted", %{
       connection: connection
     } do
       assert {:ok, conn} = Freddy.Connection.get_connection(connection)
 
       ref = Process.monitor(conn)
-      Process.exit(conn, {:shutdown, {:server_initiated_close, 320, 'Good bye'}})
+      :amqp_gen_connection.server_close(conn, {:"connection.close", ~c"Good bye", 302, 0, 0})
       assert_receive {:DOWN, ^ref, :process, _, _}
 
-      assert_receive {:disconnected, :shutdown}
+      assert_receive {:disconnected,
+                      {:shutdown,
+                       {:connection_closing, {:server_initiated_close, ~c"Good bye", 302}}}}
+
+      assert_receive {:ready, _}, 5000
       refute_receive :init
-      assert_receive {:ready, _}
     end
 
     test "handle_call/3 is called on Freddy.Consumer.call", %{consumer: consumer} do

@@ -186,6 +186,7 @@ defmodule Freddy.Integration.TracingTest do
                     )}
   end
 
+  @tag capture_log: true
   test "consumer marks span as errored on exception", %{connection: connection} do
     Process.flag(:trap_exit, true)
 
