@@ -11,7 +11,7 @@ defmodule Freddy.Adapter.AMQP.Connection do
         username: Keyword.get(options, :username, "guest"),
         password: Keyword.get(options, :password, "guest"),
         virtual_host: Keyword.get(options, :virtual_host, "/"),
-        host: Keyword.get(options, :host, 'localhost') |> to_charlist(),
+        host: Keyword.get(options, :host, ~c"localhost") |> to_charlist(),
         port: Keyword.get(options, :port, :undefined),
         channel_max: Keyword.get(options, :channel_max, 0),
         frame_max: Keyword.get(options, :frame_max, 0),

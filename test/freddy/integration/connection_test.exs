@@ -92,6 +92,6 @@ defmodule Freddy.Integration.ConnectionTest do
     assert is_pid(conn)
     assert [amqp_params: params] = :amqp_connection.info(conn, [:amqp_params])
     amqp_params_network(host: host) = params
-    assert host == '127.0.0.1'
+    assert host == ~c"127.0.0.1"
   end
 end
