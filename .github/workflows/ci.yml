@@ -13,7 +13,7 @@ jobs:
         image: rabbitmq:3.8-alpine
         ports:
           - "5672:5672"
-    name: OTP ${{matrix.pair.otp_version}} / Elixir ${{matrix.pair.elixir}}
+    name: OTP ${{matrix.pair.otp}} / Elixir ${{matrix.pair.elixir}}
     runs-on: ubuntu-20.04
     strategy:
       matrix:
