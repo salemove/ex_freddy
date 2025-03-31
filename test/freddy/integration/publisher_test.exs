@@ -112,6 +112,7 @@ defmodule Freddy.Integration.PublisherTest do
     assert_receive {:connected, %{exchange: _}}
   end
 
+  @tag capture_log: true
   test "handle_disconnected/2 is called when RabbitMQ connection is disrupted", %{
     connection: connection
   } do
@@ -121,12 +122,14 @@ defmodule Freddy.Integration.PublisherTest do
     assert {:ok, conn} = Freddy.Connection.get_connection(connection)
 
     ref = Process.monitor(conn)
-    Process.exit(conn, {:shutdown, {:server_initiated_close, 320, 'Good bye'}})
+    :amqp_gen_connection.server_close(conn, {:"connection.close", ~c"Good bye", 302, 0, 0})
     assert_receive {:DOWN, ^ref, :process, _, _}
 
-    assert_receive {:disconnected, :shutdown}
+    assert_receive {:disconnected,
+                    {:shutdown, {:connection_closing, {:server_initiated_close, ~c"Good bye", 302}}}}
+
+    assert_receive {:connected, _}, 5000
     refute_receive :init
-    assert_receive {:connected, _}
   end
 
   test "before_publication/4 keeps message unchanged when returns {:ok, state}", %{
@@ -184,7 +187,7 @@ defmodule Freddy.Integration.PublisherTest do
     assert_receive {:terminate, :normal}
   end
 
-  @tag server: true
+  @tag server: true, capture_log: true
   test "process stops if publisher can't declare an exchange due to permanent error", %{
     connection: connection
   } do

@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [0.17.2] (2025-03-31)
+
+- Add support for Erlang 27
+
 ## [0.17.1] (2023-02-20)
 
 - Add `add_listener/2` and `remove_listener/2` functions to `Freddy.Adapter.Sandbox`.

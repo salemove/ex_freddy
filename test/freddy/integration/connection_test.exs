@@ -34,12 +34,13 @@ defmodule Freddy.Integration.ConnectionTest do
     assert conn != conn2
   end
 
+  @tag capture_log: true
   test "re-establishes connection if server closed it" do
     {:ok, pid} = Connection.start_link()
     assert {:ok, conn} = Connection.get_connection(pid)
 
     ref = Process.monitor(conn)
-    Process.exit(conn, {:shutdown, {:server_initiated_close, 320, 'Good bye'}})
+    :amqp_gen_connection.server_close(conn, {:"connection.close", ~c"Good bye", 302, 0, 0})
     assert_receive {:DOWN, ^ref, :process, _, _}
 
     assert {:ok, conn2} = Connection.get_connection(pid)
@@ -69,6 +70,7 @@ defmodule Freddy.Integration.ConnectionTest do
     assert_receive {:DOWN, ^ref, :process, _, :normal}
   end
 
+  @tag capture_log: true
   test "process can be stopped by Process.exit" do
     {:ok, pid} = Connection.start_link()
 
