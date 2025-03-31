@@ -9,10 +9,19 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      - name: Setup Erlang and Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: 27.1
+          elixir-version: 1.17
+
       - name: Check out
         uses: actions/checkout@v2
 
+      - name: Run mix deps.get
+        run: mix deps.get
+
       - name: Publish package to hex.pm
-        uses: wesleimp/action-publish-hex@ae719f0fead451221d2ca0127c0aae70c5f90b4c
+        run: mix hex.publish --yes
         env:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
