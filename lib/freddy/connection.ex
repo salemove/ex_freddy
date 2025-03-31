@@ -8,6 +8,8 @@ defmodule Freddy.Connection do
   alias Freddy.Adapter
   alias Freddy.Core.Channel
 
+  require Logger
+
   @params_docs [
     adapter: """
     Freddy adapter. Can be any module, but also can be passed as an alias `:amqp` or `:sandox`
@@ -194,7 +196,9 @@ defmodule Freddy.Connection do
         new_backoff = Backoff.succeed(backoff)
         {:ok, state(state, connection: connection, backoff: new_backoff)}
 
-      _error ->
+      {:error, error} ->
+        Logger.error("Failed to connect to RabbitMQ", reason: inspect(error))
+
         {interval, new_backoff} = Backoff.fail(backoff)
         {:backoff, interval, state(state, backoff: new_backoff)}
     end
