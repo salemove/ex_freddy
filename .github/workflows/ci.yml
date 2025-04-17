@@ -10,7 +10,7 @@ jobs:
   elixir:
     services:
       rabbitmq:
-        image: rabbitmq:3.8-alpine
+        image: public.ecr.aws/docker/library/rabbitmq:3.8-alpine
         ports:
           - "5672:5672"
     name: OTP ${{matrix.pair.otp}} / Elixir ${{matrix.pair.elixir}}
