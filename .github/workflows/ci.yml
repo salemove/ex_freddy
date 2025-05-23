@@ -14,7 +14,7 @@ jobs:
         ports:
           - "5672:5672"
     name: OTP ${{matrix.pair.otp}} / Elixir ${{matrix.pair.elixir}}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         include:

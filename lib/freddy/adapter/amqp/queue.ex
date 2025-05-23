@@ -8,7 +8,7 @@ defmodule Freddy.Adapter.AMQP.Queue do
     queue_declare =
       queue_declare(
         queue: queue,
-        durable: Keyword.get(options, :durable, false),
+        durable: Keyword.get(options, :durable, true),
         auto_delete: Keyword.get(options, :auto_delete, false),
         exclusive: Keyword.get(options, :exclusive, false),
         passive: Keyword.get(options, :passive, false),
